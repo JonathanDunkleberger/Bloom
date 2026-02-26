@@ -71,6 +71,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const [menuOpen, setMenuOpen] = useState(false);
   const [ownedItems, setOwnedItems] = useState<string[]>([]);
   const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const swipeRef = useRef<{ startX: number; id: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLInputElement>(null);
@@ -336,6 +337,37 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       const cleanDays = getCleanDays(h.id);
       if (cleanDays > 0) checkMilestones(h.id, cleanDays);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, todayStr]);
+
+  // First-day celebration toasts for quit habits (24h, 72h, 7d)
+  useEffect(() => {
+    if (!mounted) return;
+    const fired = JSON.parse(localStorage.getItem("bloom_quit_celebrations") || "{}") as Record<string, number[]>;
+    let changed = false;
+    habits.filter((h) => h.category === "quit").forEach((h) => {
+      const cd = getCleanDays(h.id);
+      const prev = fired[h.id] || [];
+      const celebrations = [
+        { day: 1, msg: "24 hours clean. Your body is already healing.", bonus: 5 },
+        { day: 3, msg: "72 hours. The hardest part is behind you.", bonus: 10 },
+        { day: 7, msg: "One week. You\u2019re rewriting your story.", bonus: 25 },
+      ];
+      for (const c of celebrations) {
+        if (cd >= c.day && !prev.includes(c.day)) {
+          prev.push(c.day);
+          changed = true;
+          setCoinToast({ msg: `${c.msg} +${c.bonus}`, icon: Sparkles });
+          setCoins((p) => {
+            const nv = p + c.bonus;
+            fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
+            return nv;
+          });
+        }
+      }
+      fired[h.id] = prev;
+    });
+    if (changed) localStorage.setItem("bloom_quit_celebrations", JSON.stringify(fired));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, todayStr]);
 
@@ -704,17 +736,33 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 pct={todayPct} bouncingId={bouncingId} season={season} darkMode={darkMode}
                 ownedItems={ownedItems}
               />
-              {/* Mood indicator */}
-              {habits.length > 0 && (
+              {/* Mood indicator — minimal pill with SVG icon */}
+              {habits.length > 0 && (() => {
+                const status = allDone ? { label: "Thriving", color: "#66FFAA", glow: true } :
+                  todayPct >= 0.5 ? { label: "Growing", color: "rgba(255,255,255,0.5)", glow: false } :
+                  todayPct > 0 ? { label: "Waking up", color: "rgba(255,255,255,0.35)", glow: false } :
+                  { label: "Resting", color: "rgba(255,255,255,0.2)", glow: false };
+                return (
                 <div style={{
                   position: "absolute", bottom: 8, left: 8,
                   background: "rgba(0,0,0,0.35)", backdropFilter: "blur(8px)", borderRadius: 8,
-                  padding: "3px 10px", fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,0.65)",
-                  zIndex: 5, letterSpacing: 0.3,
+                  padding: "3px 10px", fontSize: 9, fontWeight: 600, color: status.color,
+                  display: "flex", alignItems: "center", gap: 4, zIndex: 5, letterSpacing: 0.3,
+                  boxShadow: status.glow ? "0 0 8px rgba(102,255,170,0.15)" : "none",
                 }}>
-                  {allDone ? "Thriving" : todayPct >= 0.5 ? "Growing" : todayPct > 0 ? "Waking up" : "Resting"}
+                  {allDone ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="#66FFAA" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                  ) : todayPct >= 0.5 ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                  ) : todayPct > 0 ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2"><path d="M12 22c-4-4-8-7.5-8-12a8 8 0 1 1 16 0c0 4.5-4 8-8 12z"/><line x1="12" y1="10" x2="12" y2="14"/></svg>
+                  ) : (
+                    <svg width="10" height="10" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="rgba(255,255,255,0.2)"/></svg>
+                  )}
+                  {status.label}
                 </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Progress bar */}
@@ -789,6 +837,19 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                 </span>
               </div>
+              {/* Compassionate welcome message */}
+              {habits.length > 0 && (() => {
+                const hr = new Date().getHours();
+                const msg = hr < 12 ? "Good morning. One day at a time."
+                  : hr < 17 ? "Keep going. You\u2019re doing great."
+                  : hr < 21 ? "Almost through today. You\u2019ve got this."
+                  : "Rest well. Tomorrow is another victory.";
+                return (
+                  <div style={{ padding: "0 14px 8px", textAlign: "center" }}>
+                    <span style={{ fontSize: 12, fontStyle: "italic", color: darkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)" }}>{msg}</span>
+                  </div>
+                );
+              })()}
               {habits.length === 0 ? (
                 <div style={{ padding: "36px 20px", textAlign: "center" }}>
                   <p style={{ fontSize: 13, color: th.textMuted }}>Tap + to add your first habit</p>
@@ -811,7 +872,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                         background: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center",
                         borderRadius: "0 10px 10px 0",
                       }}>
-                        <button onClick={() => { setSwipedId(null); removeHabit(h.id); }} style={{
+                        <button onClick={() => { setSwipedId(null); setConfirmDeleteId(h.id); }} style={{
                           background: "none", border: "none", color: "white", fontSize: 11,
                           fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
                           display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
@@ -846,9 +907,9 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                             onClick={() => { setDetailId(h.id); setPage("detail"); }}
                           >
                             <div style={{
-                              width: 10, height: 10, borderRadius: "50%",
-                              background: cleanDays > 0 ? "#4caf50" : h.color,
-                              boxShadow: cleanDays > 0 ? "0 0 6px rgba(76,175,80,0.4)" : "none",
+                              width: 6, height: 6, borderRadius: "50%",
+                              background: "#4caf50",
+                              boxShadow: "0 0 6px rgba(76,175,80,0.5)",
                             }} />
                           </div>
                         ) : (
@@ -876,13 +937,13 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                             {h.name}
                           </span>
                           {quit && qd?.quitDate && (
-                            <div style={{ fontSize: 11, color: th.textSub, fontWeight: 500, marginTop: 1 }}>
-                              {cleanDays === 0 ? "Started today — you got this!" : `${fmtDuration(cleanDays)} clean`}{moneySaved > 0 && <span style={{ color: "#4caf50", marginLeft: 4 }}>• {fmtMoney(moneySaved)} saved</span>}
+                            <div style={{ fontSize: 11, color: darkMode ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.3)", fontWeight: 500, marginTop: 1 }}>
+                              {cleanDays === 0 ? "Starting today" : cleanDays === 1 ? "1 day clean" : `${fmtDuration(cleanDays)} clean`}{moneySaved > 0 && <span style={{ color: "#4caf50", marginLeft: 4 }}>{"\u00b7"} {fmtMoney(moneySaved)} saved</span>}
                             </div>
                           )}
                           {!quit && streak > 0 && (
                             <div style={{ fontSize: 11, color: th.textSub, fontWeight: 500, marginTop: 1 }}>
-                              {streak}d streak{hasFz ? " · 🧊 freeze active" : ""}
+                              {streak}d streak{hasFz ? " \u00b7 freeze active" : ""}
                             </div>
                           )}
                         </div>
@@ -1015,15 +1076,6 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 /* ── Quit habit hero: big clean counter ── */
                 <>
                   <Creature stage={Math.min(4, Math.floor(cleanD / 7))} color={detailHabit.color} happy={cleanD > 0} size={88} />
-                  <div style={{ fontFamily: "'Fraunces',serif", fontSize: 48, fontWeight: 700, color: detailHabit.color, marginTop: 8, letterSpacing: "-1px" }}>
-                    {fmtDuration(cleanD)}
-                  </div>
-                  <div style={{ fontSize: 12, color: th.textSub, fontWeight: 500 }}>clean</div>
-                  {dqd && (dqd.dailyCost || 0) > 0 && cleanD > 0 && (
-                    <div style={{ fontSize: 12, color: "#4caf50", fontWeight: 600, marginTop: 4 }}>
-                      <DollarSign size={11} style={{ display: "inline", verticalAlign: "-1px" }} />{fmtMoney((dqd.dailyCost || 0) * cleanD)} saved
-                    </div>
-                  )}
                 </>
               ) : (
                 <Creature stage={getStageForId(detailHabit.id)} color={detailHabit.color} happy={isHappy(detailHabit.id)} size={88} />
@@ -1067,6 +1119,40 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 </>
               )}
 
+              {/* Quit hero numbers */}
+              {dq && !editMode && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontFamily: "'Fraunces',serif", fontSize: 52, fontWeight: 700, color: detailHabit.color, letterSpacing: "-1px", lineHeight: 1 }}>
+                    {cleanD}
+                  </div>
+                  <div style={{ fontSize: 12, color: th.textMuted, fontWeight: 500, marginTop: 2 }}>days clean</div>
+                  {cleanD > 0 && (
+                    <div style={{ fontSize: 11, color: th.textFaint, marginTop: 2 }}>{fmtDuration(cleanD)}</div>
+                  )}
+                  {dqd && (dqd.dailyCost || 0) > 0 && cleanD > 0 && (
+                    <div style={{ fontSize: 14, color: "#4caf50", fontWeight: 600, marginTop: 6 }}>
+                      {fmtMoney((dqd.dailyCost || 0) * cleanD)} saved
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Stats — build habits only (before evolution bar) */}
+              {!editMode && !dq && (
+                <div style={{ display: "flex", gap: 24, justifyContent: "center", marginTop: 18 }}>
+                  {[
+                    { l: "Streak", v: `${getStreak(detailHabit.id)}d` },
+                    { l: "Total", v: getTotal(detailHabit.id) },
+                    { l: "Stage", v: STAGE_LABELS[getStageForId(detailHabit.id)] },
+                  ].map((s, i) => (
+                    <div key={i}>
+                      <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Fraunces',serif", color: th.text }}>{s.v}</div>
+                      <div className="lb" style={{ marginTop: 2, color: th.label }}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Evolution progress */}
               {!editMode && getStageForId(detailHabit.id) < 4 &&
                 (() => {
@@ -1091,35 +1177,6 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                     </div>
                   );
                 })()}
-
-              {/* Stats */}
-              {!editMode && (
-                <div style={{ display: "flex", gap: 24, justifyContent: "center", marginTop: 18 }}>
-                  {dq ? (
-                    [
-                      { l: "Clean", v: cleanD > 0 ? `${cleanD}d` : "—" },
-                      { l: "Urges beaten", v: urges.length },
-                      { l: "Saved", v: dqd ? fmtMoney((dqd.dailyCost || 0) * cleanD) : "$0" },
-                    ].map((s, i) => (
-                      <div key={i}>
-                        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Fraunces',serif", color: th.text }}>{s.v}</div>
-                        <div className="lb" style={{ marginTop: 2, color: th.label }}>{s.l}</div>
-                      </div>
-                    ))
-                  ) : (
-                    [
-                      { l: "Streak", v: `${getStreak(detailHabit.id)}d` },
-                      { l: "Total", v: getTotal(detailHabit.id) },
-                      { l: "Stage", v: STAGE_LABELS[getStageForId(detailHabit.id)] },
-                    ].map((s, i) => (
-                      <div key={i}>
-                        <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Fraunces',serif", color: th.text }}>{s.v}</div>
-                        <div className="lb" style={{ marginTop: 2, color: th.label }}>{s.l}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
             </div>
 
             {/* ── Quit-specific sections ── */}
@@ -1158,6 +1215,9 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                     </div>
                   </button>
                 </div>
+
+                {/* Divider */}
+                <div style={{ height: 1, background: th.cardBorder, margin: "6px 0 16px" }} />
 
                 {/* Reason editor */}
                 <div className="cd" style={{
@@ -1260,7 +1320,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
 
             {/* Remove */}
             <button
-              onClick={() => removeHabit(detailHabit.id)}
+              onClick={() => setConfirmDeleteId(detailHabit.id)}
               style={{
                 width: "100%", padding: 12, borderRadius: 12,
                 border: `1px solid ${th.dangerBorder}`, background: th.dangerBg,
@@ -1413,6 +1473,41 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       {showWelcomeBack && (
         <WelcomeBack daysAway={daysAwayCnt} onClose={() => setShowWelcomeBack(false)} th={th} />
       )}
+
+      {/* Delete confirmation modal */}
+      {confirmDeleteId && (() => {
+        const habit = habits.find(h => h.id === confirmDeleteId);
+        return (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 9999,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 32,
+          }} onClick={() => setConfirmDeleteId(null)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: th.card, borderRadius: 16, padding: "24px 20px", maxWidth: 320,
+              width: "100%", textAlign: "center",
+            }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: th.text, marginBottom: 4 }}>
+                Remove Habit?
+              </div>
+              <div style={{ fontSize: 13, color: th.textSub, lineHeight: 1.5, marginBottom: 20 }}>
+                &ldquo;{habit?.name}&rdquo; and all its data will be removed. You can undo this right after.
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => setConfirmDeleteId(null)} style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
+                  background: darkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                  color: th.text, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}>Cancel</button>
+                <button onClick={() => { removeHabit(confirmDeleteId); setConfirmDeleteId(null); }} style={{
+                  flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
+                  background: "#ef4444", color: "white", fontSize: 14, fontWeight: 600,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}>Remove</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

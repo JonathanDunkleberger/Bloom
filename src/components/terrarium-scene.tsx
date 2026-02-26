@@ -27,13 +27,12 @@ export function TerrariumScene({
   const sn = SEASONS[season] || SEASONS.summer;
   const sr = seed;
 
-  // Planet center & radius — scales up with more habits
+  // Planet center & radius — scales with habit count and progress
   const cx = 200, cy = 190;
-  const baseR = 85 + pct * 10;
-  const pr = habits.length <= 3 ? baseR
-    : habits.length <= 5 ? baseR * 1.1
-    : habits.length <= 7 ? baseR * 1.2
-    : baseR * 1.3;
+  const baseRadius = 85;
+  const habitBonus = Math.min(habits.length * 3, 25);
+  const progressBonus = pct * 10;
+  const pr = baseRadius + habitBonus + progressBonus;
 
   // Distribute creatures evenly around the top arc of planet
   const creatureAngles = habits.map((_, i) => {
@@ -65,7 +64,7 @@ export function TerrariumScene({
   return (
     <div style={{
       position: "relative", width: "100%",
-      aspectRatio: habits.length <= 4 ? "4/3" : habits.length <= 6 ? "4/3.3" : "4/3.6",
+      aspectRatio: `4 / ${3 + Math.min(habits.length * 0.05, 0.4)}`,
       borderRadius: 22, overflow: "hidden",
       background: `radial-gradient(ellipse at 50% 60%, ${sky[2]} 0%, ${sky[1]} 40%, ${sky[0]} 100%)`,
       transition: "background 1.5s ease",
@@ -252,21 +251,24 @@ export function TerrariumScene({
           const rotDeg = angleDeg + 90;
 
           const mx = habits.length > 6 ? 36 : habits.length > 4 ? 42 : habits.length > 3 ? 50 : 58;
-          const stageSizes = [28, 32, 36, 40, 44];
+          const stageSizes = [26, 26, 30, 34, 40];
           const sz = habits.length >= 8 ? Math.max(20, stageSizes[st] * 0.7) : Math.min(stageSizes[st], mx);
           const scale = sz / 52;
 
           // Stage 0 = egg
           if (st === 0) {
-            const eggSz = habits.length >= 8 ? 20 : Math.min(28, mx);
-            const eggScale = eggSz / 52;
+            const eggW = habits.length >= 8 ? 16 : 22;
+            const eggH = habits.length >= 8 ? 20 : 28;
+            const eggScale = eggH / 52;
             return (
               <g key={h.id} transform={`translate(${px}, ${py}) rotate(${rotDeg})`}>
+                {/* Glow circle */}
+                <circle cx="0" cy={-eggH / 2} r={eggH * 0.75} fill={h.color} opacity="0.1" />
                 <g style={{
                   animation: `pulse 2.5s ease-in-out infinite`,
                   animationDelay: `${r() * 2}s`,
                 }}>
-                  <g transform={`translate(0, ${-eggSz / 2 - 2}) scale(${eggScale})`}>
+                  <g transform={`translate(0, ${-eggH / 2 - 2}) scale(${eggScale})`}>
                     {/* Egg body */}
                     <ellipse cx="0" cy="0" rx="7" ry="9" fill={h.color} />
                     <ellipse cx="0" cy="-2" rx="5" ry="5.5" fill="white" opacity="0.15" />
@@ -276,7 +278,7 @@ export function TerrariumScene({
                     <path d="M-1.5 3 L0 1 L1.5 3.5" stroke={h.color} strokeWidth="0.6" fill="none" opacity="0.3" filter="url(#lp-soft)" />
                   </g>
                   {/* Name label — horizontal (counter-rotate) */}
-                  <text y={eggSz / 2 + 8} textAnchor="middle" fontSize="8.5" fill="rgba(255,255,255,0.7)" fontWeight="600"
+                  <text y={eggH / 2 + 8} textAnchor="middle" fontSize="8.5" fill="rgba(255,255,255,0.7)" fontWeight="600"
                     transform={`rotate(${-rotDeg})`}
                     style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>{h.name}</text>
                 </g>
@@ -286,6 +288,8 @@ export function TerrariumScene({
 
           return (
             <g key={h.id} transform={`translate(${px}, ${py}) rotate(${rotDeg})`}>
+              {/* Glow circle underneath */}
+              <circle cx="0" cy={-sz / 2} r={sz * 0.75} fill={h.color} opacity="0.1" />
               <g style={{
                 animation: isBouncing ? "none" : `bob ${2.2 + r() * 1.5}s ease-in-out infinite`,
                 animationDelay: `${r() * 2}s`,
@@ -299,15 +303,15 @@ export function TerrariumScene({
                   <circle cx={3 + st * 0.5} cy={-(1 + st * 0.2)} r={1.8 + st * 0.2} fill="#1a1a2e" />
                   <circle cx={-(2.5 + st * 0.4)} cy={-(2 + st * 0.3)} r={0.7} fill="white" />
                   <circle cx={3.5 + st * 0.4} cy={-(2 + st * 0.3)} r={0.7} fill="white" />
-                  {/* Blush */}
-                  <ellipse cx={-(5 + st * 0.5)} cy={1} rx="2" ry="1.2" fill={h.color + "88"} opacity={hp ? 0.5 : 0.25} />
-                  <ellipse cx={5 + st * 0.5} cy={1} rx="2" ry="1.2" fill={h.color + "88"} opacity={hp ? 0.5 : 0.25} />
+                  {/* Blush — visible when happy, hidden when neutral */}
+                  <ellipse cx={-(5 + st * 0.5)} cy={1} rx="2" ry="1.2" fill={h.color + "88"} opacity={hp ? 0.4 : 0} />
+                  <ellipse cx={5 + st * 0.5} cy={1} rx="2" ry="1.2" fill={h.color + "88"} opacity={hp ? 0.4 : 0} />
                   {/* Mouth */}
                   {hp
                     ? <path d={`M-2 ${2 + st * 0.2} Q0 ${5 + st * 0.3} 2 ${2 + st * 0.2}`} stroke="#1a1a2e" strokeWidth="1.2" fill="none" strokeLinecap="round" />
                     : <ellipse cx="0" cy={3 + st * 0.1} rx="1.2" ry="0.8" fill="#1a1a2e" />}
-                  {/* Happy sparkles */}
-                  {hp && st >= 2 && (
+                  {/* Happy sparkles — only when happy */}
+                  {hp && (
                     <>
                       <circle cx={-(8 + st)} cy={-(5 + st)} r="1" fill="#FFD700" opacity="0.5">
                         <animate attributeName="opacity" values="0.3;0.8;0.3" dur="1.8s" repeatCount="indefinite" />

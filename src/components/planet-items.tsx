@@ -30,6 +30,24 @@ function renderItem(id: string) {
           <ellipse cx="0" cy="0" rx="10" ry="5" fill="#5BA4D9" opacity="0.7" />
           <ellipse cx="0" cy="-1" rx="7" ry="3" fill="#7BBFEF" opacity="0.5" />
           <ellipse cx="-2" cy="-1.5" rx="3" ry="1.2" fill="white" opacity="0.25" />
+          {/* Ripple rings */}
+          <ellipse cx="2" cy="0" rx="3" ry="1.5" fill="none" stroke="white" strokeWidth="0.3" opacity="0.2">
+            <animate attributeName="rx" values="1;5;1" dur="4s" repeatCount="indefinite" />
+            <animate attributeName="ry" values="0.5;2.5;0.5" dur="4s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.3;0;0.3" dur="4s" repeatCount="indefinite" />
+          </ellipse>
+          <ellipse cx="-2" cy="1" rx="2" ry="1" fill="none" stroke="white" strokeWidth="0.3" opacity="0.15">
+            <animate attributeName="rx" values="0.5;4;0.5" dur="5s" repeatCount="indefinite" />
+            <animate attributeName="ry" values="0.25;2;0.25" dur="5s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.25;0;0.25" dur="5s" repeatCount="indefinite" />
+          </ellipse>
+          {/* Koi fish */}
+          <ellipse cx="0" cy="0" rx="1.2" ry="0.6" fill="#FF8A65" opacity="0.7">
+            <animateMotion path="M-3,0 Q0,-2 3,0 Q0,2 -3,0" dur="6s" repeatCount="indefinite" />
+          </ellipse>
+          <ellipse cx="0" cy="0" rx="0.9" ry="0.5" fill="#FFB74D" opacity="0.6">
+            <animateMotion path="M2,1 Q-1,0 -3,1 Q0,2 2,1" dur="7s" repeatCount="indefinite" />
+          </ellipse>
         </g>
       );
     case "bridge":
@@ -84,6 +102,19 @@ function renderItem(id: string) {
           <circle cx="-5" cy="-14" r="1" fill="#FF69B4" opacity="0.7" />
           <circle cx="4" cy="-13" r="0.8" fill="#FF69B4" opacity="0.6" />
           <circle cx="0" cy="-15" r="0.7" fill="#FFB6C1" opacity="0.8" />
+          {/* Falling petals */}
+          {[0, 1, 2, 3].map(i => {
+            const startX = -6 + i * 4;
+            const dur = 4 + i * 1.2;
+            return (
+              <ellipse key={`petal${i}`} cx={startX} cy={-14} rx="0.8" ry="0.5" fill="#FFB6C1" opacity="0.6">
+                <animate attributeName="cy" values={`${-14};2`} dur={`${dur}s`} repeatCount="indefinite" />
+                <animate attributeName="cx" values={`${startX};${startX + 3 - i}`} dur={`${dur}s`} repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.6;0.3;0" dur={`${dur}s`} repeatCount="indefinite" />
+                <animateTransform attributeName="transform" type="rotate" values="0;180;360" dur={`${dur * 0.7}s`} repeatCount="indefinite" />
+              </ellipse>
+            );
+          })}
         </g>
       );
     case "pine":
@@ -189,9 +220,18 @@ function renderItem(id: string) {
           <rect x="-2.5" y="-14" width="5" height="5" rx="1" fill="#FFD54F" opacity="0.4" />
           <rect x="-3" y="-14.5" width="6" height="1" rx="0.3" fill="#795548" />
           <rect x="-3" y="-9.5" width="6" height="1" rx="0.3" fill="#795548" />
-          {/* Glow */}
+          {/* Inner flame flicker */}
+          <ellipse cx="0" cy="-11.5" rx="0.8" ry="1.5" fill="#FFB300" opacity="0.6">
+            <animate attributeName="ry" values="1.2;1.8;1.2" dur="0.8s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.5;0.7;0.5" dur="0.8s" repeatCount="indefinite" />
+          </ellipse>
+          {/* Warm glow — pulsing */}
           <circle cx="0" cy="-11.5" r="5" fill="#FFD54F" opacity="0.08">
-            <animate attributeName="opacity" values="0.06;0.12;0.06" dur="3s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.05;0.14;0.05" dur="3s" repeatCount="indefinite" />
+            <animate attributeName="r" values="4;6;4" dur="3s" repeatCount="indefinite" />
+          </circle>
+          <circle cx="0" cy="-11.5" r="8" fill="#FFD54F" opacity="0.04">
+            <animate attributeName="opacity" values="0.02;0.06;0.02" dur="4s" repeatCount="indefinite" />
           </circle>
         </g>
       );
