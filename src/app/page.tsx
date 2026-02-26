@@ -12,13 +12,13 @@ export default async function LandingPage() {
       <nav style={{ position: "fixed", top: 0, width: "100%", zIndex: 50, background: "rgba(248,248,246,0.85)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
         <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 500 }}>
-            bloom<span style={{ color: "#6366f1" }}>.</span>
+            bloom<span style={{ color: "#4caf50" }}>.</span>
           </span>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <Link href="/sign-in" style={{ fontSize: 13, fontWeight: 600, color: "rgba(0,0,0,0.4)", textDecoration: "none", padding: "6px 12px" }}>
               Sign In
             </Link>
-            <Link href="/sign-up" style={{ fontSize: 13, fontWeight: 600, color: "white", background: "#6366f1", padding: "8px 18px", borderRadius: 10, textDecoration: "none" }}>
+            <Link href="/sign-up" style={{ fontSize: 13, fontWeight: 600, color: "white", background: "#4caf50", padding: "8px 18px", borderRadius: 10, textDecoration: "none" }}>
               Get Started
             </Link>
           </div>
@@ -27,7 +27,7 @@ export default async function LandingPage() {
 
       {/* Hero */}
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "120px 24px 60px", textAlign: "center" }}>
-        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(99,102,241,0.06)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(76,175,80,0.06)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 28 }}>
           🥚
         </div>
         <h1 style={{ fontFamily: "'Fraunces',serif", fontSize: 38, fontWeight: 500, lineHeight: 1.15, letterSpacing: "-1px", marginBottom: 14 }}>
@@ -36,7 +36,7 @@ export default async function LandingPage() {
         <p style={{ fontSize: 15, color: "rgba(0,0,0,0.35)", lineHeight: 1.5, maxWidth: 380, margin: "0 auto 28px" }}>
           Every day you show up, your creatures evolve. Watch your terrarium come alive as you build the life you want.
         </p>
-        <Link href="/sign-up" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: "white", background: "#6366f1", padding: "12px 28px", borderRadius: 12, textDecoration: "none", boxShadow: "0 4px 14px rgba(99,102,241,0.25)" }}>
+        <Link href="/sign-up" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: "white", background: "#4caf50", padding: "12px 28px", borderRadius: 12, textDecoration: "none", boxShadow: "0 4px 14px rgba(76,175,80,0.25)" }}>
           Start Growing — Free
         </Link>
       </div>
@@ -62,7 +62,7 @@ export default async function LandingPage() {
       {/* Footer */}
       <footer style={{ textAlign: "center", padding: "30px 20px 40px", borderTop: "1px solid rgba(0,0,0,0.04)" }}>
         <span style={{ fontFamily: "'Fraunces',serif", fontSize: 16, fontWeight: 500, color: "rgba(0,0,0,0.15)" }}>
-          bloom<span style={{ color: "#6366f1" }}>.</span>
+          bloom<span style={{ color: "#4caf50" }}>.</span>
         </span>
         <p style={{ fontSize: 11, color: "rgba(0,0,0,0.15)", marginTop: 6 }}>
           © {new Date().getFullYear()} Bloom. Every good day grows your world.

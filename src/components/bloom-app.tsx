@@ -46,8 +46,19 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const [coins, setCoins] = useState(initialCoins);
   const [earned, setEarned] = useState<EarnedMilestones>(initialEarned);
   const [streakFreezes, setStreakFreezes] = useState<Record<string, number>>(initialStreakFreezes);
-  const [darkMode, setDarkMode] = useState(false);
-  const [season, setSeason] = useState<SeasonKey>(getSeason());
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("bloom_dark") === "1";
+    }
+    return false;
+  });
+  const [season, setSeason] = useState<SeasonKey>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("bloom_season") as SeasonKey | null;
+      if (saved && saved in SEASONS) return saved;
+    }
+    return getSeason();
+  });
   const th = THEME[darkMode ? "dark" : "light"];
   const sn = SEASONS[season];
   const [page, setPage] = useState<"main" | "detail" | "add" | "gallery" | "constellation" | "social">("main");
@@ -115,6 +126,14 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       localStorage.setItem("bloom_quit_data", JSON.stringify(quitDataMap));
     }
   }, [quitDataMap]);
+
+  // Persist dark mode & season
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("bloom_dark", darkMode ? "1" : "0");
+  }, [darkMode]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("bloom_season", season);
+  }, [season]);
 
   const todayStr = today();
 
@@ -546,7 +565,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {page === "main" && (
               <>
-                {habits.length > 0 && (
+                {buildHabits.length > 0 && (
                   <span style={{
                     fontSize: 11, fontWeight: 700,
                     color: allDone ? "#4caf50" : th.textMuted,
@@ -554,7 +573,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                     padding: "3px 10px", borderRadius: 100,
                     display: "flex", alignItems: "center", gap: 3, transition: "all .3s",
                   }}>
-                    <Flame size={11} />{totalToday}/{habits.length}
+                    <Flame size={11} />{totalToday}/{buildHabits.length}
                   </span>
                 )}
                 <button
@@ -655,7 +674,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
           <div style={fs}>
             <div ref={terRef} style={{ position: "relative" }}>
               <TerrariumScene
-                habits={habits} getStage={getStageForId} isHappy={isHappy}
+                habits={buildHabits} getStage={getStageForId} isHappy={isHappy}
                 pct={todayPct} bouncingId={bouncingId} season={season} darkMode={darkMode}
               />
               {habits.length > 0 && (
@@ -730,7 +749,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
             )}
 
             {/* Gentle time-of-day nudge */}
-            {totalToday === 0 && habits.length > 0 && (() => {
+            {totalToday === 0 && buildHabits.length > 0 && (() => {
               const hr = new Date().getHours();
               const nudge = hr < 12
                 ? { emoji: "🌅", msg: "Good morning! A small step forward today?" }
@@ -876,9 +895,9 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
             </div>
 
             {/* All activity heatmap */}
-            {habits.length > 0 && (() => {
+            {buildHabits.length > 0 && (() => {
               // Streak-at-risk alerts
-              const atRisk = habits.filter((h) => !isHappy(h.id) && getStreak(h.id) >= 3);
+              const atRisk = buildHabits.filter((h) => !isHappy(h.id) && getStreak(h.id) >= 3);
               return atRisk.length > 0 ? (
                 <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
                   {atRisk.slice(0, 2).map((h) => (
@@ -900,8 +919,8 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
             })()}
 
             {/* Next evolution preview */}
-            {habits.length > 0 && (() => {
-              const closest = habits
+            {buildHabits.length > 0 && (() => {
+              const closest = buildHabits
                 .map((h) => ({ h, stage: getStageForId(h.id), total: getTotal(h.id) }))
                 .filter((c) => c.stage < 4)
                 .map((c) => ({ ...c, next: STAGE_THRESHOLDS[c.stage + 1], remaining: STAGE_THRESHOLDS[c.stage + 1] - c.total }))
