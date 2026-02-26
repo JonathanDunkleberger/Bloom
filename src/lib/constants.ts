@@ -24,21 +24,19 @@ export const PRESET_CATEGORIES = [
   { cat: "reduce", label: "Reduce" },
 ] as const;
 
-export const MILESTONES = [
+export const MILESTONES: { days: number; coins: number; label: string; iconName: string }[] = [
   { days: 1, coins: 1, label: "First step", iconName: "Zap" },
-  { days: 3, coins: 5, label: "3-day momentum", iconName: "TrendingUp" },
+  { days: 3, coins: 5, label: "3 days", iconName: "TrendingUp" },
   { days: 7, coins: 15, label: "One week", iconName: "Star" },
   { days: 14, coins: 30, label: "Two weeks", iconName: "Trophy" },
   { days: 21, coins: 50, label: "Habit formed", iconName: "Brain" },
   { days: 30, coins: 100, label: "One month", iconName: "Sparkles" },
   { days: 60, coins: 200, label: "Two months", iconName: "Heart" },
   { days: 90, coins: 500, label: "Quarter year", iconName: "Flame" },
-  { days: 180, coins: 1000, label: "Half year", iconName: "Trophy" },
-  { days: 365, coins: 5000, label: "One year", iconName: "Star" },
-] as const;
+];
 
 export const STAGE_LABELS = ["Egg", "Hatchling", "Young", "Growing", "Evolved"];
-export const STAGE_THRESHOLDS = [0, 3, 7, 15, 30];
+export const STAGE_THRESHOLDS = [0, 1, 5, 12, 25];
 
 export const HABIT_COLORS = [
   "#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6",

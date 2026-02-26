@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { daysAgo, fmtDate } from "@/lib/utils";
 
 interface HeatmapProps {
@@ -8,65 +9,62 @@ interface HeatmapProps {
   color?: string;
 }
 
-export function Heatmap({ getData, weeks = 16, color = "#6366f1" }: HeatmapProps) {
-  const cellSize = 12;
+export function Heatmap({ getData, weeks = 16, color = "#4caf50" }: HeatmapProps) {
+  const cs = 12;
   const gap = 2;
-  const labelW = 20;
-  const w = weeks * (cellSize + gap) + labelW + 4;
-  const h = 7 * (cellSize + gap) + 8;
+  const lw = 18;
 
-  const r = parseInt(color.slice(1, 3), 16) || 99;
-  const g = parseInt(color.slice(3, 5), 16) || 102;
-  const b = parseInt(color.slice(5, 7), 16) || 241;
+  const cr = parseInt(color.slice(1, 3), 16) || 76;
+  const cg = parseInt(color.slice(3, 5), 16) || 175;
+  const cb = parseInt(color.slice(5, 7), 16) || 80;
 
-  const heatColor = (val: number) => {
-    if (val === 0) return "rgba(0,0,0,0.035)";
-    if (val <= 0.25) return `rgba(${r},${g},${b},0.2)`;
-    if (val <= 0.5) return `rgba(${r},${g},${b},0.4)`;
-    if (val <= 0.75) return `rgba(${r},${g},${b},0.65)`;
-    return `rgba(${r},${g},${b},0.9)`;
+  const hc = (v: number): string => {
+    if (!v || v === 0) return "rgba(0,0,0,0.025)";
+    if (v <= 0.25) return `rgba(${cr},${cg},${cb},0.25)`;
+    if (v <= 0.5) return `rgba(${cr},${cg},${cb},0.45)`;
+    if (v <= 0.75) return `rgba(${cr},${cg},${cb},0.7)`;
+    return `rgba(${cr},${cg},${cb},0.95)`;
   };
 
-  const todayDow = new Date().getDay();
-  const cells: { wk: number; dow: number; date: string; val: number }[] = [];
-
-  for (let wk = 0; wk < weeks; wk++) {
-    for (let dow = 0; dow < 7; dow++) {
-      const daysBack = (weeks - 1 - wk) * 7 + (todayDow - dow);
-      if (daysBack < 0) continue;
-      const date = daysAgo(daysBack);
-      cells.push({ wk, dow, date, val: getData(date) });
+  const cells = useMemo(() => {
+    const result: Array<{ weekIdx: number; dow: number; date: string; val: number }> = [];
+    const now = new Date();
+    const totalDays = weeks * 7;
+    const start = new Date();
+    start.setDate(start.getDate() - totalDays + 1);
+    const startDow = start.getDay();
+    for (let i = 0; i < totalDays; i++) {
+      const date = daysAgo(totalDays - 1 - i);
+      const d = new Date(date + "T12:00:00");
+      if (d > now) continue;
+      const dow = d.getDay();
+      const weekIdx = Math.floor((i + startDow) / 7);
+      result.push({ weekIdx, dow, date, val: getData(date) });
     }
-  }
+    return result;
+  }, [getData, weeks]);
 
-  const dayLabels = ["", "M", "", "W", "", "F", ""];
+  const maxWeek = cells.length > 0 ? Math.max(...cells.map((c) => c.weekIdx)) : 0;
+  const svgW = (maxWeek + 1) * (cs + gap) + lw + 4;
 
   return (
-    <div style={{ overflowX: "auto", paddingBottom: 2 }}>
-      <svg width={w} height={h} style={{ display: "block", minWidth: w }}>
-        {dayLabels.map((d, i) => (
-          <text
-            key={i}
-            x={1}
-            y={i * (cellSize + gap) + cellSize}
-            fontSize="8"
-            fill="rgba(0,0,0,0.18)"
-            fontFamily="inherit"
-            dominantBaseline="middle"
-          >
+    <div style={{ overflowX: "auto" }}>
+      <svg width={svgW} height={7 * (cs + gap) + 4} style={{ display: "block", minWidth: svgW }}>
+        {["S", "M", "", "W", "", "F", ""].map((d, i) => (
+          <text key={i} x={0} y={i * (cs + gap) + cs - 1} fontSize="8" fill="rgba(0,0,0,0.14)" fontFamily="inherit">
             {d}
           </text>
         ))}
         {cells.map((c, i) => (
           <rect
             key={i}
-            x={c.wk * (cellSize + gap) + labelW}
-            y={c.dow * (cellSize + gap)}
-            width={cellSize}
-            height={cellSize}
-            rx={2.5}
-            fill={heatColor(c.val)}
-            style={{ transition: "fill 0.15s" }}
+            x={c.weekIdx * (cs + gap) + lw}
+            y={c.dow * (cs + gap)}
+            width={cs}
+            height={cs}
+            rx={3}
+            fill={hc(c.val)}
+            style={{ transition: "fill 0.3s ease" }}
           >
             <title>
               {fmtDate(c.date)}: {Math.round(c.val * 100)}%
@@ -75,11 +73,11 @@ export function Heatmap({ getData, weeks = 16, color = "#6366f1" }: HeatmapProps
         ))}
       </svg>
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2, marginTop: 2 }}>
-        <span style={{ fontSize: 8, color: "rgba(0,0,0,0.18)" }}>Less</span>
+        <span style={{ fontSize: 8, color: "rgba(0,0,0,0.12)" }}>Less</span>
         {[0, 0.25, 0.5, 0.75, 1].map((v, i) => (
-          <div key={i} style={{ width: 9, height: 9, borderRadius: 2, background: heatColor(v) }} />
+          <div key={i} style={{ width: 10, height: 10, borderRadius: 2.5, background: hc(v) }} />
         ))}
-        <span style={{ fontSize: 8, color: "rgba(0,0,0,0.18)" }}>More</span>
+        <span style={{ fontSize: 8, color: "rgba(0,0,0,0.12)" }}>More</span>
       </div>
     </div>
   );

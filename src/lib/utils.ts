@@ -22,10 +22,10 @@ export function getIcon(name: string): LucideIcon {
 }
 
 export function getStage(totalDays: number): number {
-  if (totalDays >= 30) return 4;
-  if (totalDays >= 15) return 3;
-  if (totalDays >= 7) return 2;
-  if (totalDays >= 3) return 1;
+  if (totalDays >= 25) return 4;
+  if (totalDays >= 12) return 3;
+  if (totalDays >= 5) return 2;
+  if (totalDays >= 1) return 1;
   return 0;
 }
 

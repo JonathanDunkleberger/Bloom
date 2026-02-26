@@ -24,10 +24,10 @@ export default async function GardenPage() {
     ? await supabase.from("habit_logs").select("*").in("habit_id", habitIds).gte("log_date", yearAgo)
     : { data: [] };
 
-  // Fetch profile for coins
+  // Fetch profile for coins + streak_freezes
   const { data: profile } = await supabase
     .from("profiles")
-    .select("coins")
+    .select("coins, streak_freezes")
     .eq("clerk_id", userId)
     .single();
 
@@ -76,6 +76,7 @@ export default async function GardenPage() {
       initialHabits={habitsWithStats}
       initialCoins={profile?.coins ?? 0}
       initialEarned={earned}
+      initialStreakFreezes={(profile?.streak_freezes as Record<string, number>) ?? {}}
     />
   );
 }
