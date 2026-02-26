@@ -94,14 +94,7 @@
   }
 }
 
-:root {
-  --background: #f8f8f6;
-  --foreground: #1a1a2e;
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
   font-family: "DM Sans", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -110,10 +103,9 @@ body {
 
 /* ─── Card ─── */
 .cd {
-  background: white;
   border-radius: 18px;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 16px rgba(0, 0, 0, 0.015);
+  border: 1px solid transparent;
+  transition: background .3s, border-color .3s, box-shadow .3s;
 }
 
 /* ─── Habit row ─── */
@@ -129,7 +121,7 @@ body {
   -webkit-user-select: none;
   position: relative;
 }
-.rw:hover { background: rgba(0, 0, 0, 0.01); }
+.rw:hover { background: rgba(128, 128, 128, 0.04); }
 .rw:active { transform: scale(0.985); }
 
 /* ─── Check circle ─── */
@@ -137,7 +129,7 @@ body {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 2.5px solid rgba(0, 0, 0, 0.08);
+  border: 2.5px solid rgba(128, 128, 128, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -155,7 +147,6 @@ body {
   background: none;
   border: none;
   cursor: pointer;
-  color: rgba(0, 0, 0, 0.06);
   padding: 3px;
   display: flex;
   position: absolute;
@@ -164,7 +155,7 @@ body {
   transform: translateY(-50%);
 }
 .rw:hover .dl { opacity: 1; }
-.dl:hover { color: #ef4444; }
+.dl:hover { color: #ef4444 !important; }
 
 /* ─── Label ─── */
 .lb {
@@ -172,7 +163,6 @@ body {
   font-weight: 700;
   letter-spacing: 0.7px;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.18);
 }
 
 /* ─── Preset button ─── */
@@ -182,19 +172,16 @@ body {
   gap: 7px;
   padding: 9px 13px;
   border-radius: 11px;
-  border: 1.5px solid rgba(0, 0, 0, 0.04);
-  background: white;
+  border: 1.5px solid transparent;
   cursor: pointer;
   transition: all 0.12s;
   font-size: 12.5px;
   font-weight: 500;
   font-family: inherit;
-  color: #1a1a2e;
 }
 .pb:hover {
-  border-color: rgba(0, 0, 0, 0.08);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 .pb:active { transform: scale(0.97); }
 
@@ -202,7 +189,6 @@ body {
 .mbg {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -212,7 +198,6 @@ body {
   animation: fadeIn 0.18s ease;
 }
 .ml {
-  background: white;
   border-radius: 22px 22px 0 0;
   width: 100%;
   max-width: 520px;
@@ -226,16 +211,15 @@ body {
 .inp {
   width: 100%;
   padding: 11px 14px;
-  border: 2px solid rgba(0, 0, 0, 0.04);
+  border: 2px solid transparent;
   border-radius: 12px;
   font-size: 14px;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.12s;
-  background: #FAFAF8;
+  transition: border-color 0.12s, background .3s;
 }
-.inp:focus { border-color: #4caf50; background: white; }
-.inp::placeholder { color: rgba(0, 0, 0, 0.18); }
+.inp:focus { border-color: #4caf50 !important; }
+.inp::placeholder { color: rgba(128, 128, 128, 0.4); }
 
 /* ─── Color dot ─── */
 .ct {
@@ -249,8 +233,8 @@ body {
 }
 .ct:hover { transform: scale(1.15); }
 .ct.sl {
-  border-color: #1a1a2e;
-  box-shadow: 0 0 0 2px white, 0 0 0 4px #1a1a2e;
+  border-color: currentColor;
+  box-shadow: 0 0 0 2px rgba(128,128,128,0.2), 0 0 0 3.5px currentColor;
 }
 
 /* ─── Small button ─── */
@@ -268,30 +252,6 @@ body {
   gap: 5px;
 }
 .btn-s:active { transform: scale(0.96); }
-
-/* ─── Streak pill ─── */
-.streak-pill {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 100px;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-/* ─── Coins badge ─── */
-.coins-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 10px;
-  border-radius: 100px;
-  background: rgba(245, 158, 11, 0.06);
-  color: #d97706;
-  font-size: 11px;
-  font-weight: 700;
-}
 
 /* ─── FAB ─── */
 .fab {
