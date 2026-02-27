@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Wind, Pencil, RefreshCw, Sparkles } from "lucide-react";
+import { X, Wind, PenLine, RotateCcw, RefreshCw, Sparkles, ChevronLeft, Check } from "lucide-react";
 import { Creature } from "@/components/creature";
 import type { ThemeColors } from "@/lib/constants";
 
@@ -125,7 +125,7 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
             {/* Breathe */}
             <div style={card} onClick={() => { setScreen("breathe"); setBPhase("inhale"); setBSec(0); setBCycle(0); }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 22 }}>🫁</span>
+                <Wind size={22} color="rgba(255,255,255,0.5)" strokeWidth={1.5} />
                 <div style={{ textAlign: "left" }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: "white" }}>Breathe</div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>5-minute guided breathing</div>
@@ -136,7 +136,7 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
             {/* Write */}
             <div style={card} onClick={() => setScreen("write")}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 22 }}>✏️</span>
+                <PenLine size={22} color="rgba(255,255,255,0.5)" strokeWidth={1.5} />
                 <div style={{ textAlign: "left" }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: "white" }}>Write it out</div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>What triggered this?</div>
@@ -147,7 +147,7 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
             {/* Redirect */}
             <div style={card} onClick={() => setScreen("redirect")}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 22 }}>🔄</span>
+                <RotateCcw size={22} color="rgba(255,255,255,0.5)" strokeWidth={1.5} />
                 <div style={{ textAlign: "left" }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: "white" }}>Redirect</div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>A quick activity to reset</div>
@@ -216,8 +216,9 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
           <button onClick={() => setScreen("menu")} style={{
             background: "none", border: "none", color: "rgba(255,255,255,0.25)",
             fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 10,
+            display: "inline-flex", alignItems: "center", gap: 2,
           }}>
-            ← Back
+            <ChevronLeft size={14} strokeWidth={1.5} /> Back
           </button>
         </div>
       </div>
@@ -290,8 +291,9 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
             <button onClick={() => setScreen("menu")} style={{
               background: "none", border: "none", color: "rgba(255,255,255,0.25)",
               fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 14,
+              display: "inline-flex", alignItems: "center", gap: 2,
             }}>
-              ← Back
+              <ChevronLeft size={14} strokeWidth={1.5} /> Back
             </button>
           </div>
         </div>
@@ -339,7 +341,7 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
               border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
               display: "inline-flex", alignItems: "center", gap: 6,
             }}>
-              I did it ✓
+              <Check size={14} strokeWidth={2.5} /> I did it
             </button>
           </div>
 
@@ -347,8 +349,9 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
             <button onClick={() => setScreen("menu")} style={{
               background: "none", border: "none", color: "rgba(255,255,255,0.25)",
               fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginTop: 18,
+              display: "inline-flex", alignItems: "center", gap: 2,
             }}>
-              ← Back
+              <ChevronLeft size={14} strokeWidth={1.5} /> Back
             </button>
           </div>
         </div>
@@ -373,6 +376,7 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
           <Creature stage={3} color={habit.color} happy size={100} />
           <Sparkles
             size={28} color="#fbbf24"
+            strokeWidth={1.5}
             style={{
               position: "absolute", top: -4, right: "calc(50% - 58px)",
               animation: "pulse 1.2s ease-in-out infinite",
@@ -381,9 +385,6 @@ export function UrgeSupport({ habit, urgesToday, onComplete, onClose, th }: Urge
         </div>
 
         <div style={{ fontSize: 20, fontWeight: 700, color: "white", marginBottom: 6, fontFamily: "'Fraunces',serif" }}>
-          You outlasted the urge.
-        </div>
-        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>
           {rewardMsg}
         </div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 20 }}>

@@ -2,6 +2,7 @@
 
 import { Star, LayoutGrid } from "lucide-react";
 import { Creature } from "@/components/creature";
+import { CoinBadge } from "@/components/milestone-coin";
 import { STAGE_LABELS, STAGE_THRESHOLDS } from "@/lib/constants";
 import type { ThemeColors } from "@/lib/constants";
 import type { HabitWithStats } from "@/types";
@@ -13,9 +14,10 @@ interface GalleryProps {
   isHappy: (id: string) => boolean;
   th: ThemeColors;
   onCreatureTap?: (habitId: string) => void;
+  earnedMilestoneCoins?: Record<string, string[]>;
 }
 
-export function Gallery({ habits, getStage, getTotal, isHappy, th, onCreatureTap }: GalleryProps) {
+export function Gallery({ habits, getStage, getTotal, isHappy, th, onCreatureTap, earnedMilestoneCoins }: GalleryProps) {
   const allCreatures = habits.map((h) => ({
     ...h,
     stage: getStage(h.id),
@@ -105,6 +107,11 @@ export function Gallery({ habits, getStage, getTotal, isHappy, th, onCreatureTap
                   ))}
                 </div>
                 <div style={{ fontSize: 9, color: th.textMuted, marginTop: 3 }}>{c.total} days completed</div>
+                {earnedMilestoneCoins && (earnedMilestoneCoins[c.id] || []).length > 0 && (
+                  <div style={{ marginTop: 4, display: "flex", justifyContent: "center" }}>
+                    <CoinBadge earnedCoins={earnedMilestoneCoins[c.id]} isQuit={c.category === "quit"} />
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -200,8 +200,9 @@ export function TerrariumScene({
         <circle cx={cx - pr * 0.1} cy={cy + pr * 0.35} r={pr * 0.18} fill="rgba(0,80,0,0.06)" />
         <circle cx={cx + pr * 0.15} cy={cy - pr * 0.35} r={pr * 0.15} fill="rgba(0,60,0,0.04)" />
 
-        {/* ── SURFACE DETAILS: reduced — max 8 grass tufts, subtle ── */}
-        {Array.from({ length: Math.min(8, 4 + Math.floor(pct * 4)) }).map((_, i) => {
+        {/* ── SURFACE DETAILS: always-present default vegetation ── */}
+        {/* Default grass tufts — 7 always present, plus up to 4 more with progress */}
+        {Array.from({ length: Math.min(11, 7 + Math.floor(pct * 4)) }).map((_, i) => {
           const r = sr(i * 47 + 33);
           const angle = (-140 + r() * 280) * Math.PI / 180;
           const sx = cx + Math.cos(angle) * (pr - 1), sy = cy + Math.sin(angle) * (pr - 1);
@@ -215,8 +216,8 @@ export function TerrariumScene({
           );
         })}
 
-        {/* Flowers on surface — max 4, subtle */}
-        {Array.from({ length: Math.min(4, Math.floor(pct * 4)) }).map((_, i) => {
+        {/* Default flowers — 4 always present */}
+        {Array.from({ length: Math.min(6, 4 + Math.floor(pct * 2)) }).map((_, i) => {
           const r = sr(i * 89 + 51);
           const angle = (-120 + r() * 240) * Math.PI / 180;
           const fx = cx + Math.cos(angle) * (pr + 1), fy = cy + Math.sin(angle) * (pr + 1);
@@ -228,6 +229,39 @@ export function TerrariumScene({
             </g>
           );
         })}
+
+        {/* ── DEFAULT SMALL TREE — always present, gives planet character ── */}
+        {(() => {
+          const tr = sr(777);
+          const tAngle = (-35 + tr() * 10) * Math.PI / 180; // upper-left area
+          const tx = cx + Math.cos(tAngle) * (pr + 1);
+          const ty = cy + Math.sin(tAngle) * (pr + 1);
+          const trunkH = 8;
+          const trunkX = tx + Math.cos(tAngle - Math.PI / 2) * 2;
+          const trunkY = ty + Math.sin(tAngle - Math.PI / 2) * 2;
+          const crownX = tx + Math.cos(tAngle - Math.PI / 2) * (trunkH + 4);
+          const crownY = ty + Math.sin(tAngle - Math.PI / 2) * (trunkH + 4);
+          const isAutumn = season === "autumn";
+          const isWinter = season === "winter";
+          const crownColor = isAutumn ? "#D4741C" : isWinter ? "#8BA88B" : "#4a9e4a";
+          return (
+            <g key="default-tree">
+              {/* Trunk */}
+              <line x1={tx} y1={ty} x2={trunkX} y2={trunkY}
+                stroke="#6B4226" strokeWidth={2} strokeLinecap="round" />
+              <line x1={trunkX} y1={trunkY}
+                x2={trunkX + Math.cos(tAngle - Math.PI / 2) * 3}
+                y2={trunkY + Math.sin(tAngle - Math.PI / 2) * 3}
+                stroke="#6B4226" strokeWidth={1.5} strokeLinecap="round" />
+              {/* Crown */}
+              <circle cx={crownX} cy={crownY} r={5} fill={crownColor} opacity={0.85} />
+              <circle cx={crownX - 2} cy={crownY - 1} r={3.5} fill={crownColor} opacity={0.7} />
+              <circle cx={crownX + 2} cy={crownY + 0.5} r={3} fill={crownColor} opacity={0.6} />
+              {/* Highlight */}
+              <circle cx={crownX - 1} cy={crownY - 2} r={1.5} fill="white" opacity={0.08} />
+            </g>
+          );
+        })()}
 
         {/* ── OWNED SHOP ITEMS on planet surface — LOWER hemisphere ── */}
         {ownedItems.map((itemId, i) => {

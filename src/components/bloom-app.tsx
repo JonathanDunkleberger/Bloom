@@ -6,7 +6,7 @@ import {
   Check, Plus, X, Flame, ChevronLeft, Coins, Sparkles,
   Pencil, Shield, Sun, Moon, LayoutGrid,
   Users, RefreshCw, Wind, DollarSign,
-  Sunrise, SunMedium, MoonStar, Menu, Store,
+  Sunrise, SunMedium, MoonStar, Menu, Store, Snowflake,
 } from "lucide-react";
 import { Creature } from "@/components/creature";
 import { TerrariumScene } from "@/components/terrarium-scene";
@@ -26,6 +26,8 @@ import { UrgeSupport } from "@/components/urge-support";
 import { BloomPlusScreen, BloomPlusMiniPrompt, SevenDayCelebration } from "@/components/bloom-plus-screen";
 import { Onboarding } from "@/components/onboarding";
 import { MultiHabitHeatmap } from "@/components/multi-habit-heatmap";
+import { MilestoneCoin, MilestoneCelebration, CoinBadge, CoinRow, MILESTONE_COINS } from "@/components/milestone-coin";
+import type { CoinTier } from "@/components/milestone-coin";
 import { getStage, getIcon, today, daysAgo, daysBetween, fmtDuration, fmtMoney, fmtQuitDate, haptic, getGreeting, formatLiveTimer } from "@/lib/utils";
 import {
   MILESTONES, STAGE_LABELS, STAGE_THRESHOLDS,
@@ -50,6 +52,9 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const [coins, setCoins] = useState(initialCoins);
   const [earned, setEarned] = useState<EarnedMilestones>(initialEarned);
   const [streakFreezes, setStreakFreezes] = useState<Record<string, number>>(initialStreakFreezes);
+  const [frozenHabits, setFrozenHabits] = useState<Record<string, boolean>>({});
+  const [earnedMilestoneCoins, setEarnedMilestoneCoins] = useState<Record<string, string[]>>({});
+  const [milestoneCelebration, setMilestoneCelebration] = useState<{ tier: CoinTier; habitName: string; coinReward: number } | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [season, setSeason] = useState<SeasonKey>(getSeason());
   const th = THEME[darkMode ? "dark" : "light"];
@@ -153,6 +158,18 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
         if (rawItems) setOwnedItems(JSON.parse(rawItems));
       } catch { /* ignore */ }
 
+      // Load frozen habits
+      try {
+        const rawFrozen = localStorage.getItem("bloom_frozen_habits");
+        if (rawFrozen) setFrozenHabits(JSON.parse(rawFrozen));
+      } catch { /* ignore */ }
+
+      // Load earned milestone coins
+      try {
+        const rawMC = localStorage.getItem("bloom_milestone_coins");
+        if (rawMC) setEarnedMilestoneCoins(JSON.parse(rawMC));
+      } catch { /* ignore */ }
+
       // Load Bloom+ state
       const savedPro = localStorage.getItem("bloom_pro");
       if (savedPro === "1") setIsPro(true);
@@ -200,6 +217,20 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       }
     }
   }, [ownedItems]);
+
+  // Persist frozen habits
+  useEffect(() => {
+    if (typeof window !== "undefined" && Object.keys(frozenHabits).length > 0) {
+      localStorage.setItem("bloom_frozen_habits", JSON.stringify(frozenHabits));
+    }
+  }, [frozenHabits]);
+
+  // Persist milestone coins
+  useEffect(() => {
+    if (typeof window !== "undefined" && Object.keys(earnedMilestoneCoins).length > 0) {
+      localStorage.setItem("bloom_milestone_coins", JSON.stringify(earnedMilestoneCoins));
+    }
+  }, [earnedMilestoneCoins]);
 
   // Persist dark mode & season
   useEffect(() => {
@@ -468,6 +499,56 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
     }
   };
 
+  // Check AA-style milestone coins
+  const checkMilestoneCoins = useCallback((habitId: string, habitName: string, isQuitHabit: boolean, days: number, hours?: number) => {
+    const current = earnedMilestoneCoins[habitId] || [];
+    const coinsToCheck = isQuitHabit
+      ? MILESTONE_COINS
+      : MILESTONE_COINS.filter((c) => c.days > 0);
+
+    let newlyEarned: CoinTier | null = null;
+    const updated = [...current];
+
+    for (const coin of coinsToCheck) {
+      if (current.includes(coin.key)) continue;
+      const earned = isQuitHabit
+        ? (hours !== undefined ? hours >= coin.hours : days >= coin.days)
+        : days >= coin.days;
+      if (earned) {
+        updated.push(coin.key);
+        newlyEarned = coin; // keep track of latest new coin for celebration
+      }
+    }
+
+    if (updated.length > current.length) {
+      setEarnedMilestoneCoins((prev) => ({ ...prev, [habitId]: updated }));
+      // Show celebration for the highest newly earned coin
+      if (newlyEarned) {
+        // Map coin tier to a coin reward (use the existing MILESTONES coin value if matching, otherwise 0)
+        const matchingMilestone = MILESTONES.find((m) => m.days === newlyEarned!.days);
+        setMilestoneCelebration({
+          tier: newlyEarned,
+          habitName,
+          coinReward: matchingMilestone?.coins || 0,
+        });
+        haptic("success");
+      }
+    }
+  }, [earnedMilestoneCoins]);
+
+  // Check milestone coins for quit habits (passive time growth)
+  useEffect(() => {
+    if (!mounted) return;
+    habits.filter((h) => h.category === "quit").forEach((h) => {
+      const qd = getQuitData(h.id);
+      if (!qd?.quitDate) return;
+      const cleanDays = getCleanDays(h.id);
+      const hoursSinceQuit = Math.floor((Date.now() - new Date(qd.quitDate).getTime()) / (1000 * 60 * 60));
+      checkMilestoneCoins(h.id, h.name, true, cleanDays, hoursSinceQuit);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, todayStr]);
+
   // Check milestones for quit habits (their streaks grow passively with time)
   useEffect(() => {
     if (!mounted) return;
@@ -560,6 +641,11 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       if (!wasComplete && data.action === "logged") {
         const streak = getStreak(hId) + 1;
         setTimeout(() => checkMilestones(hId, streak), 100);
+        // Check AA-style milestone coins for build habits
+        const habit = habits.find((h) => h.id === hId);
+        if (habit && habit.category !== "quit") {
+          setTimeout(() => checkMilestoneCoins(hId, habit.name, false, streak), 200);
+        }
       }
     } catch {
       router.refresh();
@@ -653,6 +739,17 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       }).catch(() => router.refresh());
       return newCoins;
     });
+  };
+
+  const toggleFreeze = (hId: string) => {
+    const isFrozen = !!frozenHabits[hId];
+    setFrozenHabits((prev) => ({ ...prev, [hId]: !isFrozen }));
+    haptic("light");
+    if (!isFrozen) {
+      setCoinToast({ msg: "Habit frozen. Streak preserved while paused.", icon: Snowflake });
+    } else {
+      setCoinToast({ msg: "Habit unfrozen. Welcome back!", icon: Snowflake });
+    }
   };
 
   const buyItem = (itemId: string) => {
@@ -851,6 +948,16 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
           urgeCount={sevenDayCelebration.urgeCount}
           onTryBloomPlus={() => { setSevenDayCelebration(null); setShowPaywall(true); }}
           onKeepGoingFree={() => setSevenDayCelebration(null)}
+        />
+      )}
+
+      {/* AA-style milestone coin celebration */}
+      {milestoneCelebration && (
+        <MilestoneCelebration
+          tier={milestoneCelebration.tier}
+          habitName={milestoneCelebration.habitName}
+          coinReward={milestoneCelebration.coinReward}
+          onDismiss={() => setMilestoneCelebration(null)}
         />
       )}
 
@@ -1166,6 +1273,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   const done = !quit && isHappy(h.id);
                   const streak = quit ? 0 : getStreak(h.id);
                   const hasFz = !quit && (streakFreezes[h.id] || 0) > 0;
+                  const isFrozen = !quit && !!frozenHabits[h.id];
                   const cleanDays = quit ? getCleanDays(h.id) : 0;
                   const qd = quit ? getQuitData(h.id) : undefined;
                   const moneySaved = quit && qd ? (qd.dailyCost || 0) * cleanDays : 0;
@@ -1196,10 +1304,12 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                             style={{
                               background: done ? h.color : "transparent",
                               borderColor: done ? "transparent" : th.checkBorder,
+                              opacity: isFrozen ? 0.3 : 1,
+                              pointerEvents: isFrozen ? "none" : "auto",
                             }}
-                            onClick={(e) => { e.stopPropagation(); toggleCompletion(h.id); }}
+                            onClick={(e) => { e.stopPropagation(); if (!isFrozen) toggleCompletion(h.id); }}
                           >
-                            <Check size={14} color="white" strokeWidth={3} />
+                            {isFrozen ? <Snowflake size={14} color={th.textMuted} strokeWidth={2} /> : <Check size={14} color="white" strokeWidth={3} />}
                           </div>
                         )}
                         <div
@@ -1209,23 +1319,34 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                           <span style={{
                             fontSize: 15, fontWeight: 500,
                             textDecoration: !quit && done ? "line-through" : "none",
-                            color: !quit && done ? th.textMuted : th.text,
+                            color: isFrozen ? th.textMuted : (!quit && done ? th.textMuted : th.text),
                             transition: "all 0.2s",
+                            display: "inline-flex", alignItems: "center", gap: 4,
                           }}>
                             {h.name}
+                            {isFrozen && <Snowflake size={12} color="#60a5fa" strokeWidth={2} />}
                           </span>
                           {quit && qd?.quitDate && (
                             <div style={{ fontSize: 11, color: darkMode ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.3)", fontWeight: 500, marginTop: 1 }}>
                               {cleanDays === 0 ? "Just started" : cleanDays === 1 ? "1 day clean" : `${fmtDuration(cleanDays)} clean`}{moneySaved > 0 && <span style={{ color: "#4caf50", marginLeft: 4 }}>{"\u00b7"} {fmtMoney(moneySaved)} saved</span>}
                             </div>
                           )}
-                          {!quit && streak > 0 && (
+                          {isFrozen && (
+                            <div style={{ fontSize: 11, color: "#60a5fa", fontWeight: 500, marginTop: 1 }}>
+                              Frozen {"\u00b7"} streak preserved
+                            </div>
+                          )}
+                          {!quit && !isFrozen && streak > 0 && (
                             <div style={{ fontSize: 11, color: th.textSub, fontWeight: 500, marginTop: 1 }}>
                               {streak}d streak{hasFz ? " \u00b7 freeze active" : ""}
                             </div>
                           )}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          {/* Milestone coin badge */}
+                          {(earnedMilestoneCoins[h.id] || []).length > 0 && (
+                            <CoinBadge earnedCoins={earnedMilestoneCoins[h.id]} isQuit={quit} />
+                          )}
                           {quit ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); setUrgeSupportHabit(h); }}
@@ -1614,6 +1735,17 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   <HealingTimeline habit={detailHabit} cleanDays={cleanD} th={th} />
                 </div>
 
+                {/* AA-style milestone coins */}
+                {(earnedMilestoneCoins[detailHabit.id] || []).length > 0 && (
+                  <div className="cd" style={{
+                    padding: 14, marginBottom: 10,
+                    background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 8, color: "rgba(255,255,255,0.25)" }}>Milestone Coins</div>
+                    <CoinRow habitId={detailHabit.id} earnedCoins={earnedMilestoneCoins[detailHabit.id] || []} isQuit />
+                  </div>
+                )}
+
                 {/* Milestones */}
                 <div className="cd" style={{
                   padding: 14, marginBottom: 10,
@@ -1679,23 +1811,41 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: th.text }}>Streak Freeze</div>
                       <div style={{ fontSize: 10, color: th.textSub }}>
-                        {(streakFreezes[detailHabit.id] || 0) > 0
-                          ? `${streakFreezes[detailHabit.id]} freeze${(streakFreezes[detailHabit.id] || 0) > 1 ? "s" : ""} active`
-                          : "Protect your streak from one missed day"}
+                        {frozenHabits[detailHabit.id]
+                          ? "Habit is paused — streak preserved"
+                          : (streakFreezes[detailHabit.id] || 0) > 0
+                            ? `${streakFreezes[detailHabit.id]} freeze${(streakFreezes[detailHabit.id] || 0) > 1 ? "s" : ""} active`
+                            : "Protect your streak from one missed day"}
                       </div>
                     </div>
                   </div>
-                  <button
-                    className="btn-s"
-                    onClick={() => buyFreeze(detailHabit.id)}
-                    style={{
-                      background: coins >= 50 ? th.freezeBtnBg : th.freezeBtnOff,
-                      color: coins >= 50 ? "#42b4d6" : th.textMuted,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <Coins size={11} /> 50
-                  </button>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <button
+                      className="btn-s"
+                      onClick={() => toggleFreeze(detailHabit.id)}
+                      style={{
+                        background: frozenHabits[detailHabit.id] ? "#60a5fa" : th.freezeBtnBg,
+                        color: frozenHabits[detailHabit.id] ? "#fff" : "#42b4d6",
+                        whiteSpace: "nowrap",
+                        display: "inline-flex", alignItems: "center", gap: 3,
+                      }}
+                    >
+                      <Snowflake size={11} /> {frozenHabits[detailHabit.id] ? "Unfreeze" : "Freeze"}
+                    </button>
+                    {!frozenHabits[detailHabit.id] && (
+                      <button
+                        className="btn-s"
+                        onClick={() => buyFreeze(detailHabit.id)}
+                        style={{
+                          background: coins >= 50 ? th.freezeBtnBg : th.freezeBtnOff,
+                          color: coins >= 50 ? "#42b4d6" : th.textMuted,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <Coins size={11} /> 50
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Activity heatmap — compact 12 weeks */}
@@ -1706,6 +1856,17 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, padding: "0 4px 8px", color: "rgba(255,255,255,0.25)" }}>Activity</div>
                   <Heatmap getData={detailHeatData} color={detailHabit.color} weeks={12} heatEmpty={th.heatEmpty} labelColor={th.label} legendColor={th.textFaint} />
                 </div>
+
+                {/* AA-style milestone coins */}
+                {(earnedMilestoneCoins[detailHabit.id] || []).length > 0 && (
+                  <div className="cd" style={{
+                    padding: 14, marginBottom: 10,
+                    background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 8, color: "rgba(255,255,255,0.25)" }}>Milestone Coins</div>
+                    <CoinRow habitId={detailHabit.id} earnedCoins={earnedMilestoneCoins[detailHabit.id] || []} isQuit={false} />
+                  </div>
+                )}
 
                 {/* Milestones */}
                 <div className="cd" style={{
@@ -1756,6 +1917,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
         {page === "gallery" && (
           <Gallery habits={habits} getStage={getStageForId} getTotal={getTotal} isHappy={isHappy} th={th}
             onCreatureTap={(hId) => { setDetailId(hId); setPage("detail"); }}
+            earnedMilestoneCoins={earnedMilestoneCoins}
           />
         )}
 

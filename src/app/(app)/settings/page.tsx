@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { Crown, ExternalLink } from "lucide-react";
+import { Crown, ExternalLink, ChevronLeft } from "lucide-react";
 import { SettingsClient } from "./settings-client";
 
 export default async function SettingsPage() {
@@ -48,8 +48,8 @@ export default async function SettingsPage() {
         <p style={{ fontSize: 12, color: "rgba(0,0,0,0.3)", marginBottom: 8 }}>
           Manage your account settings, profile, and security through Clerk.
         </p>
-        <Link href="/garden" style={{ fontSize: 12, fontWeight: 600, color: "#6366f1", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
-          ← Back to Home
+        <Link href="/garden" style={{ fontSize: 12, fontWeight: 600, color: "#6366f1", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 2 }}>
+          <ChevronLeft size={14} /> Back to Home
         </Link>
       </div>
     </div>

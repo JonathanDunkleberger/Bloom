@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Infinity, Coins, TrendingUp, TreePine, Palette } from "lucide-react";
+import { X, Infinity, Coins, TrendingUp, TreePine, Palette, Sparkles } from "lucide-react";
 
 interface BloomPlusScreenProps {
   onClose: () => void;
@@ -273,7 +273,9 @@ export function SevenDayCelebration({
           animation: "fadeUp .3s ease",
         }}
       >
-        <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "center" }}>
+          <Sparkles size={40} color="#FFD93D" strokeWidth={1.5} />
+        </div>
         <h2 style={{
           fontFamily: "'Fraunces',serif", fontSize: 20, fontWeight: 600,
           color: "white", marginBottom: 8,
