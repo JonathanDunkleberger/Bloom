@@ -12,6 +12,7 @@ interface TerrariumSceneProps {
   habits: HabitWithStats[];
   getStage: (id: string) => number;
   isHappy: (id: string) => boolean;
+  getStreak?: (id: string) => number;
   pct: number;
   bouncingId: string | null;
   season?: SeasonKey;
@@ -20,8 +21,18 @@ interface TerrariumSceneProps {
   onCreatureTap?: (habitId: string) => void;
 }
 
+/** Determine creature mood based on time, completion, and streak */
+type CreatureMood = "healthy" | "neglected" | "thriving" | "sleeping";
+function getCreatureMood(isHappy: boolean, streak: number): CreatureMood {
+  const hour = new Date().getHours();
+  if (hour >= 22 || hour < 5) return "sleeping";
+  if (!isHappy && hour >= 15) return "neglected";
+  if (streak >= 7) return "thriving";
+  return "healthy";
+}
+
 export function TerrariumScene({
-  habits, getStage, isHappy, pct, bouncingId,
+  habits, getStage, isHappy, getStreak, pct, bouncingId,
   season = "summer", darkMode = false, ownedItems = [],
   onCreatureTap,
 }: TerrariumSceneProps) {
@@ -172,9 +183,29 @@ export function TerrariumScene({
           <circle cx="335" cy="52" r="2.5" fill="#D4CCC0" opacity="0.35" />
           <circle cx="344" cy="58" r="1.8" fill="#D4CCC0" opacity="0.3" />
           <circle cx="338" cy="60" r="1.2" fill="#D4CCC0" opacity="0.25" />
-          {/* Moon glow */}
-          <circle cx="340" cy="55" r={half ? 24 : 16} fill="#FFFDE8" opacity={half ? 0.06 : 0.02} />
+          {/* Moon glow — pulsing */}
+          <circle cx="340" cy="55" r={half ? 24 : 16} fill="#FFFDE8" opacity={half ? 0.06 : 0.02}>
+            <animate attributeName="opacity" values={half ? "0.04;0.1;0.04" : "0.02;0.05;0.02"} dur="8s" repeatCount="indefinite" />
+          </circle>
         </g>
+
+        {/* ── SUBTLE CLOUDS ── */}
+        {pct > 0.2 && (
+          <>
+            <ellipse cx="70" cy="90" rx="28" ry="6" fill="white" opacity="0" filter="url(#lp-soft)">
+              <animate attributeName="opacity" values="0;0.03;0.03;0" dur="18s" repeatCount="indefinite" />
+              <animateTransform attributeName="transform" type="translate" values="-12,0;12,0;-12,0" dur="18s" repeatCount="indefinite" />
+            </ellipse>
+            <ellipse cx="280" cy="120" rx="22" ry="5" fill="white" opacity="0" filter="url(#lp-soft)">
+              <animate attributeName="opacity" values="0;0.025;0.025;0" dur="22s" repeatCount="indefinite" begin="6s" />
+              <animateTransform attributeName="transform" type="translate" values="-10,0;10,0;-10,0" dur="22s" repeatCount="indefinite" begin="6s" />
+            </ellipse>
+            <ellipse cx="160" cy="65" rx="18" ry="4" fill="white" opacity="0" filter="url(#lp-soft)">
+              <animate attributeName="opacity" values="0;0.02;0.02;0" dur="25s" repeatCount="indefinite" begin="12s" />
+              <animateTransform attributeName="transform" type="translate" values="-8,0;8,0;-8,0" dur="25s" repeatCount="indefinite" begin="12s" />
+            </ellipse>
+          </>
+        )}
 
         {/* ── ORBITAL RING ── */}
         <ellipse cx={cx} cy={cy + 10} rx={pr + 38} ry={12 + pct * 4} fill="none" stroke="rgba(255,255,255,0.035)" strokeWidth="0.8" strokeDasharray="4 6">
@@ -290,6 +321,8 @@ export function TerrariumScene({
         {habits.map((h, i) => {
           const st = getStage(h.id);
           const hp = isHappy(h.id);
+          const streak = getStreak ? getStreak(h.id) : 0;
+          const mood = getCreatureMood(hp, streak);
           const isBouncing = bouncingId === h.id;
           const isQuitHabit = h.category === "quit";
           const r = sr(h.id.charCodeAt(0) * 100 + i);
@@ -311,21 +344,40 @@ export function TerrariumScene({
           const creatureColor = getCreatureColor(h.color);
           const spritePath = getCreatureSprite(st, creatureColor);
 
-          // Animation: bouncing on completion, calm float for quit habits, gentle bob otherwise
+          // Animation: mood-aware
           const anim = isBouncing
             ? "completionBounce 0.5s cubic-bezier(0.34,1.56,0.64,1)"
-            : isQuitHabit
-              ? `creatureIdleFloat 3s ease-in-out infinite`
-              : `bob ${2.2 + r() * 1.5}s ease-in-out infinite`;
+            : mood === "sleeping"
+              ? `creatureIdleFloat 4s ease-in-out infinite`
+              : mood === "neglected"
+                ? `neglectedWobble 3s ease-in-out infinite`
+                : mood === "thriving"
+                  ? `bob ${1.8 + r() * 0.8}s ease-in-out infinite`
+                  : isQuitHabit
+                    ? `creatureIdleFloat 3s ease-in-out infinite`
+                    : `bob ${2.2 + r() * 1.5}s ease-in-out infinite`;
+
+          // Mood-based filter
+          const moodFilter = mood === "sleeping"
+            ? "saturate(0.4) brightness(0.7)"
+            : mood === "neglected"
+              ? "saturate(0.55) brightness(0.8) opacity(0.85)"
+              : mood === "thriving"
+                ? "saturate(1.1) brightness(1.05)"
+                : hp ? "none" : "saturate(0.5) brightness(0.8)";
+
+          // Mood-based scale
+          const moodScale = mood === "thriving" ? "scale(1.05)" : "";
 
           return (
             <g key={h.id} transform={`translate(${px}, ${py}) rotate(${rotDeg})`}
               style={{ cursor: onCreatureTap ? "pointer" : "default" }}
               onClick={() => onCreatureTap?.(h.id)}
             >
-              {/* Soft glow circle underneath creature */}
-              <circle cx="0" cy={0} r={scaledSz * 0.4} fill={h.color} opacity={hp ? 0.18 : 0.08} />
-              <g style={{ animation: anim, animationDelay: `${r() * 2}s` }}>
+              {/* Soft glow circle underneath creature — thriving gets bigger glow */}
+              <circle cx="0" cy={0} r={scaledSz * (mood === "thriving" ? 0.55 : 0.4)}
+                fill={h.color} opacity={mood === "thriving" ? 0.25 : hp ? 0.18 : 0.08} />
+              <g style={{ animation: anim, animationDelay: `${r() * 2}s`, transform: moodScale }}>
                 {/* ONE sprite image via foreignObject */}
                 <foreignObject
                   x={-scaledSz / 2} y={-scaledSz}
@@ -342,8 +394,11 @@ export function TerrariumScene({
                     style={{
                       imageRendering: "pixelated",
                       display: "block",
-                      filter: hp ? "none" : "saturate(0.5) brightness(0.8)",
-                      transition: "filter 0.3s",
+                      filter: moodFilter,
+                      transition: "filter 0.5s ease, transform 0.3s ease",
+                      animation: mood === "healthy" || mood === "thriving"
+                        ? `creatureBlink 4s ease-in-out infinite ${1 + r() * 3}s`
+                        : undefined,
                     }}
                     draggable={false}
                   />
@@ -359,7 +414,7 @@ export function TerrariumScene({
                     textAlign: "center",
                     fontSize: 10,
                     fontWeight: 600,
-                    color: "rgba(255,255,255,0.85)",
+                    color: mood === "sleeping" ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.85)",
                     textShadow: "0 1px 3px rgba(0,0,0,0.8)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
@@ -369,6 +424,51 @@ export function TerrariumScene({
                     fontFamily: "inherit",
                   }}>{h.name}</div>
                 </foreignObject>
+
+                {/* ZZZ for sleeping creatures */}
+                {mood === "sleeping" && (
+                  <foreignObject
+                    x={scaledSz * 0.1} y={-scaledSz * 0.9}
+                    width={30} height={20}
+                    transform={`rotate(${-rotDeg})`}
+                    style={{ overflow: "visible" }}
+                  >
+                    <div style={{ position: "relative" }}>
+                      {["z", "z", "z"].map((z, zi) => (
+                        <span key={zi} style={{
+                          position: "absolute",
+                          left: zi * 5,
+                          top: -zi * 4,
+                          fontSize: 7 + zi * 2,
+                          fontWeight: 700,
+                          color: "rgba(180,200,255,0.5)",
+                          animation: `zzzFloat 2.5s ease-in-out infinite`,
+                          animationDelay: `${zi * 0.6}s`,
+                        }}>{z}</span>
+                      ))}
+                    </div>
+                  </foreignObject>
+                )}
+
+                {/* Sparkles for thriving creatures */}
+                {mood === "thriving" && !isBouncing && (
+                  <>
+                    {[0, 1, 2].map((si) => {
+                      const sa = (si * 120 + 30) * Math.PI / 180;
+                      const sd = scaledSz * 0.5;
+                      return (
+                        <circle key={`ts${si}`}
+                          cx={Math.cos(sa) * sd}
+                          cy={-scaledSz / 2 + Math.sin(sa) * sd}
+                          r="1.5" fill="white" opacity="0"
+                        >
+                          <animate attributeName="opacity" values="0;0.7;0" dur={`${1.5 + si * 0.4}s`} repeatCount="indefinite" begin={`${si * 0.5}s`} />
+                          <animate attributeName="r" values="0.5;2;0.5" dur={`${1.5 + si * 0.4}s`} repeatCount="indefinite" begin={`${si * 0.5}s`} />
+                        </circle>
+                      );
+                    })}
+                  </>
+                )}
               </g>
 
               {/* Sparkle particles on completion bounce */}

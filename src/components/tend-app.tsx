@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Check, Plus, X, Flame, ChevronLeft, Coins, Sparkles,
   Pencil, Shield, Sun, Moon, LayoutGrid,
-  Users, RefreshCw, Wind, DollarSign,
+  Users, RefreshCw, Wind, DollarSign, Heart,
   Sunrise, SunMedium, MoonStar, Menu, Store, Pause, Play,
 } from "lucide-react";
 import { Creature } from "@/components/creature";
@@ -28,6 +28,7 @@ import { Onboarding } from "@/components/onboarding";
 import { MultiHabitHeatmap } from "@/components/multi-habit-heatmap";
 import { MilestoneCoin, MilestoneCelebration, CoinBadge, CoinRow, MILESTONE_COINS } from "@/components/milestone-coin";
 import type { CoinTier } from "@/components/milestone-coin";
+import { MorningCheckin } from "@/components/morning-checkin";
 import { getStage, getIcon, today, daysAgo, daysBetween, fmtDuration, fmtMoney, fmtQuitDate, haptic, getGreeting, formatLiveTimer } from "@/lib/utils";
 import {
   MILESTONES, STAGE_LABELS, STAGE_THRESHOLDS,
@@ -58,7 +59,26 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   const [darkMode, setDarkMode] = useState(false);
   const [season, setSeason] = useState<SeasonKey>(getSeason());
   const th = THEME[darkMode ? "dark" : "light"];
-  const [page, setPage] = useState<"main" | "detail" | "add" | "gallery" | "constellation" | "social" | "shop">("main");
+  const [page, setPageRaw] = useState<"main" | "detail" | "add" | "gallery" | "constellation" | "social" | "shop">("main");
+  const prevPageRef = useRef<string>("main");
+  const [pageAnim, setPageAnim] = useState<string>("");
+
+  // Wrap setPage to track transitions
+  const setPage = useCallback((next: "main" | "detail" | "add" | "gallery" | "constellation" | "social" | "shop") => {
+    const prev = prevPageRef.current;
+    if (next === prev) return;
+    // Determine animation direction
+    const pageOrder = ["main", "detail", "add", "gallery", "constellation", "social", "shop"];
+    const goingDeeper = next !== "main";
+    const goingBack = next === "main" && prev !== "main";
+    setPageAnim(
+      goingBack ? "pageSlideInLeft .3s ease both" :
+      goingDeeper ? "pageSlideInRight .3s ease both" :
+      "pageSlideInUp .3s ease both"
+    );
+    prevPageRef.current = next;
+    setPageRaw(next);
+  }, []);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [coinToast, setCoinToast] = useState<{ msg: string; icon: LucideIcon } | null>(null);
   const [undoToast, setUndoToast] = useState<{ msg: string; onUndo: () => void } | null>(null);
@@ -88,6 +108,9 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const terRef = useRef<HTMLDivElement>(null);
 
+  // ── Egg callout tooltip for first quit habit ──
+  const [showEggCallout, setShowEggCallout] = useState(false);
+
   // ── Tend+ tier state ──
   const [isPro, setIsPro] = useState(false);
   const [proExpiry, setProExpiry] = useState<string | null>(null);
@@ -100,6 +123,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   // ── Onboarding state ──
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [appLoading, setAppLoading] = useState(true);
+  const [showMorningCheckin, setShowMorningCheckin] = useState(false);
 
   // ── All-done celebration state ──
   const [showAurora, setShowAurora] = useState(false);
@@ -186,6 +210,13 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       const onboardingDone = localStorage.getItem("tend_onboarding_complete");
       if (!onboardingDone && initialHabits.length === 0) {
         setShowOnboarding(true);
+      }
+
+      // Morning check-in — show once per day if user has habits
+      const checkinDate = localStorage.getItem("tend_checkin_date");
+      const todayNow = new Date().toISOString().slice(0, 10);
+      if (checkinDate !== todayNow && initialHabits.length > 0 && onboardingDone) {
+        setShowMorningCheckin(true);
       }
 
       setAppLoading(false);
@@ -283,6 +314,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   }, [isPro]);
 
   const todayStr = today();
+  const yesterdayStr = daysAgo(1);
 
   // Build completions map from habits logs
   const completions: Record<string, boolean> = {};
@@ -676,6 +708,12 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
         // Initialise quit data for quit habits
         if (cat === "quit") {
           updateQuitData(newHabit.id, { quitDate: new Date().toISOString(), dailyCost, reason: "", urges: [], bestStreak: 0 });
+          // Show egg callout if first quit habit
+          const eggSeen = localStorage.getItem("tend_egg_callout_shown");
+          if (!eggSeen) {
+            setTimeout(() => setShowEggCallout(true), 600);
+            localStorage.setItem("tend_egg_callout_shown", "1");
+          }
         }
         setPage("main");
         setCName("");
@@ -884,16 +922,60 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       {/* Onboarding flow */}
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
 
-      {/* Loading splash */}
+      {/* Loading skeleton */}
       {appLoading && (
         <div style={{
           position: "fixed", inset: 0, background: "#0a0e18", zIndex: 9998,
-          display: "flex", alignItems: "center", justifyContent: "center",
+          display: "flex", flexDirection: "column", alignItems: "center",
         }}>
-          <span style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 700, color: "white" }}>
-            b<span style={{ color: "#4ade80" }}>.</span>
-          </span>
+          <div style={{ maxWidth: 520, width: "100%", padding: "0 14px" }}>
+            {/* Header skeleton */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 2px 10px" }}>
+              <div style={{ width: 70, height: 24, borderRadius: 8, background: "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />
+              </div>
+            </div>
+            {/* Planet skeleton */}
+            <div style={{ width: "100%", aspectRatio: "1/1", maxHeight: 380, borderRadius: 22, background: "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite", marginBottom: 16 }} />
+            {/* Habit rows skeleton */}
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", opacity: 1 - i * 0.25 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 12, background: "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite", animationDelay: `${i * 0.15}s` }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ width: 100 + i * 20, height: 12, borderRadius: 6, background: "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite", animationDelay: `${i * 0.15}s`, marginBottom: 6 }} />
+                  <div style={{ width: 60, height: 8, borderRadius: 4, background: "linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite", animationDelay: `${i * 0.15}s` }} />
+                </div>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite", animationDelay: `${i * 0.15}s` }} />
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Morning check-in */}
+      {showMorningCheckin && (
+        <MorningCheckin
+          habits={habits}
+          quitDataMap={quitDataMap}
+          getCleanDays={getCleanDays}
+          getStreak={getStreak}
+          isComplete={isComplete}
+          todayStr={todayStr}
+          yesterdayStr={yesterdayStr}
+          onDismiss={() => {
+            setShowMorningCheckin(false);
+            localStorage.setItem("tend_checkin_date", todayStr);
+            setCoins((p) => {
+              const nv = p + 2;
+              fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
+              return nv;
+            });
+            setCoinToast({ msg: "Checked in! +2", icon: Sunrise });
+          }}
+          th={th}
+        />
       )}
 
       <Confetti active={confetti} />
@@ -937,7 +1019,18 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
         <RelapseModal
           habit={relapseHabit}
           cleanDays={getCleanDays(relapseHabit.id)}
-          onConfirm={() => { resetQuit(relapseHabit.id); setRelapseHabit(null); setCoinToast({ msg: "Counter reset. You've got this.", icon: RefreshCw }); }}
+          bestStreak={quitDataMap[relapseHabit.id]?.bestStreak}
+          onConfirm={() => {
+            resetQuit(relapseHabit.id);
+            setRelapseHabit(null);
+            // +5 coins for honesty
+            setCoins((p) => {
+              const nv = p + 5;
+              fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
+              return nv;
+            });
+            setCoinToast({ msg: "Brave honesty. +5 coins. You've got this.", icon: Heart });
+          }}
           onClose={() => setRelapseHabit(null)}
           th={th}
         />
@@ -986,7 +1079,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
         />
       )}
 
-      <div style={{ maxWidth: 520, margin: "0 auto", padding: "0 14px 90px" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto", padding: "0 14px 90px" }} key={page} >
+        <div style={{ animation: pageAnim || undefined }}>
         {/* HEADER */}
         <div style={{ ...fs, padding: "14px 2px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {page !== "main" ? (
@@ -1119,6 +1213,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
             <div ref={terRef} style={{ position: "relative" }}>
               <TerrariumScene
                 habits={habits} getStage={getStageForId} isHappy={isHappy}
+                getStreak={getStreak}
                 pct={todayPct} bouncingId={bouncingId} season={season} darkMode={darkMode}
                 ownedItems={ownedItems}
                 onCreatureTap={(hId) => { setDetailId(hId); setPage("detail"); }}
@@ -1203,6 +1298,44 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                 );
               })()}
             </div>
+
+            {/* Egg callout tooltip for first quit habit */}
+            {showEggCallout && page === "main" && (
+              <div style={{
+                position: "relative", display: "flex", justifyContent: "center",
+                marginTop: -6, marginBottom: 8, zIndex: 20,
+                animation: "tooltipPop 0.4s cubic-bezier(.16,1,.3,1)",
+              }}>
+                {/* Arrow pointing up to planet */}
+                <div style={{
+                  position: "absolute", top: -6, left: "50%", transform: "translateX(-50%)",
+                  width: 0, height: 0,
+                  borderLeft: "6px solid transparent", borderRight: "6px solid transparent",
+                  borderBottom: `6px solid ${th.card}`,
+                }} />
+                <div style={{
+                  background: th.card, borderRadius: 14, padding: "10px 16px",
+                  border: `1px solid ${th.cardBorder}`,
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                  display: "flex", alignItems: "center", gap: 10,
+                  maxWidth: 300, cursor: "pointer",
+                  animation: "tooltipPulse 3s ease-in-out infinite",
+                }}
+                  onClick={() => setShowEggCallout(false)}
+                >
+                  <span style={{ fontSize: 22 }}>🥚</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: th.text, marginBottom: 1 }}>
+                      Your egg has appeared!
+                    </div>
+                    <div style={{ fontSize: 11, color: th.textSub, lineHeight: 1.4 }}>
+                      Each clean day helps it grow. Tap your creature to see its progress.
+                    </div>
+                  </div>
+                  <X size={14} style={{ color: th.textMuted, flexShrink: 0 }} />
+                </div>
+              </div>
+            )}
 
             {/* Progress bar */}
             {habits.length > 0 && (
@@ -2137,6 +2270,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
           </div>
         );
       })()}
+    </div>
     </div>
   );
 }

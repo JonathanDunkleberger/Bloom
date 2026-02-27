@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tend — System Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:wght@700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0e18;
+    color: #c8c5d4;
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    padding: 60px 40px 80px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+  .header-icon {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+    border-radius: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 28px; font-weight: 700; color: #0a0e18;
+    margin-bottom: 20px;
+  }
+  .header h1 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 42px; font-weight: 700; color: white;
+    letter-spacing: 6px; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .header h2 {
+    font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.25);
+    letter-spacing: 4px; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .header .url {
+    font-size: 12px; color: rgba(255,255,255,0.15);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Layer Labels ── */
+  .layer-label {
+    font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.2);
+    letter-spacing: 3px; text-transform: uppercase;
+    margin-bottom: 16px; margin-top: 48px;
+  }
+
+  /* ── Grid ── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card-grid.three { grid-template-columns: repeat(3, 1fr); }
+  .card-grid.two { grid-template-columns: repeat(2, 1fr); }
+
+  /* ── Cards ── */
+  .card {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: rgba(255,255,255,0.12); }
+
+  .card-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .card-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; font-weight: 700; color: white;
+    flex-shrink: 0;
+  }
+  .card-title {
+    font-size: 14px; font-weight: 700; color: white;
+    line-height: 1.2;
+  }
+  .card-subtitle {
+    font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.3);
+  }
+
+  .card-badge {
+    position: absolute; top: 16px; right: 16px;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; padding: 3px 8px;
+    border-radius: 4px; color: white;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .card-list {
+    list-style: none; padding: 0;
+  }
+  .card-list li {
+    font-size: 12px; color: rgba(255,255,255,0.4);
+    padding: 3px 0;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .card-list li::before {
+    content: '·';
+    color: rgba(255,255,255,0.2);
+    font-weight: 700;
+  }
+  .card-list .arrow {
+    color: rgba(255,255,255,0.15);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+  }
+  .card-list .highlight {
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
+  }
+
+  /* ── Connector Lines ── */
+  .connector {
+    display: flex; justify-content: center; align-items: center;
+    padding: 8px 0;
+    gap: 24px;
+  }
+  .connector-pill {
+    font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; padding: 5px 14px;
+    border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    color: rgba(255,255,255,0.3);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .connector-line {
+    width: 1px; height: 20px;
+    background: rgba(255,255,255,0.06);
+    margin: 0 auto;
+  }
+  .connector-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    margin: 0 auto;
+  }
+
+  /* ── Colors ── */
+  .bg-green  { background: rgba(74, 222, 128, 0.15); }
+  .bg-blue   { background: rgba(96, 165, 250, 0.15); }
+  .bg-purple { background: rgba(167, 139, 250, 0.15); }
+  .bg-amber  { background: rgba(251, 191, 36, 0.15); }
+  .bg-rose   { background: rgba(251, 113, 133, 0.15); }
+  .bg-cyan   { background: rgba(103, 232, 249, 0.15); }
+  .bg-orange { background: rgba(251, 146, 60, 0.15); }
+  .bg-emerald { background: rgba(52, 211, 153, 0.15); }
+
+  .badge-green  { background: rgba(74, 222, 128, 0.2); color: #4ade80; }
+  .badge-blue   { background: rgba(96, 165, 250, 0.2); color: #60a5fa; }
+  .badge-purple { background: rgba(167, 139, 250, 0.2); color: #a78bfa; }
+  .badge-amber  { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+  .badge-rose   { background: rgba(251, 113, 133, 0.2); color: #fb7185; }
+  .badge-cyan   { background: rgba(103, 232, 249, 0.2); color: #67e8f9; }
+  .badge-orange { background: rgba(251, 146, 60, 0.2); color: #fb923c; }
+
+  /* ── Tech Stack Footer ── */
+  .tech-stack {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 8px; margin-top: 56px; padding-top: 32px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .tech-pill {
+    font-size: 11px; font-weight: 600; padding: 5px 14px;
+    border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    body { padding: 32px 16px 60px; }
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+    .card-grid.three { grid-template-columns: repeat(2, 1fr); }
+    .header h1 { font-size: 28px; letter-spacing: 4px; }
+  }
+  @media (max-width: 500px) {
+    .card-grid, .card-grid.three, .card-grid.two { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<div class="header">
+  <div class="header-icon">t</div>
+  <h1>T E N D</h1>
+  <h2>System Architecture</h2>
+  <div class="url">tendhabit.app</div>
+</div>
+
+<!-- ═══════════════ EXPERIENCE LAYER ═══════════════ -->
+<div class="layer-label">E X P E R I E N C E</div>
+<div class="card-grid">
+
+  <div class="card">
+    <div class="card-badge badge-green">DUAL MODE</div>
+    <div class="card-header">
+      <div class="card-icon bg-green">H</div>
+      <div>
+        <div class="card-title">Habit Tracking</div>
+        <div class="card-subtitle">Build + Quit modes</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li><span class="highlight">Build</span> <span class="arrow">→</span> daily checkbox</li>
+      <li><span class="highlight">Quit</span> <span class="arrow">→</span> auto sobriety timer</li>
+      <li>Pause / resume per habit</li>
+      <li>Rename + custom colors</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-rose">3 TOOLS</div>
+    <div class="card-header">
+      <div class="card-icon bg-rose">U</div>
+      <div>
+        <div class="card-title">Urge System</div>
+        <div class="card-subtitle">Crisis intervention</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li><span class="highlight">Breathe</span> <span class="arrow">→</span> 4-4-6 guided cycle</li>
+      <li><span class="highlight">Write</span> <span class="arrow">→</span> journal + trigger tags</li>
+      <li><span class="highlight">Redirect</span> <span class="arrow">→</span> physical activity</li>
+      <li>+3 coins per urge survived</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-amber">5 STAGES</div>
+    <div class="card-header">
+      <div class="card-icon bg-amber">P</div>
+      <div>
+        <div class="card-title">Planet & Creatures</div>
+        <div class="card-subtitle">Gamified progress</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Egg <span class="arrow">→</span> Hatchling <span class="arrow">→</span> Evolved</li>
+      <li>72h egg progression w/ CSS anim</li>
+      <li>Creature mood reactions</li>
+      <li>Default foliage + shop items</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-purple">TEND+</div>
+    <div class="card-header">
+      <div class="card-icon bg-purple">S</div>
+      <div>
+        <div class="card-title">Subscription</div>
+        <div class="card-subtitle">Freemium model</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li><span class="highlight">Free</span> <span class="arrow">→</span> 3 habits, all recovery</li>
+      <li><span class="highlight">Tend+</span> <span class="arrow">→</span> $4.99/mo, $29.99/yr</li>
+      <li>Recovery features never gated</li>
+      <li>5 soft + 1 hard paywall CTAs</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="connector">
+  <div class="connector-pill">N E X T . J S &nbsp; A P P</div>
+</div>
+
+<!-- ═══════════════ FRONTEND ═══════════════ -->
+<div class="layer-label">F R O N T E N D</div>
+<div class="card-grid">
+
+  <div class="card">
+    <div class="card-badge badge-blue">VERCEL</div>
+    <div class="card-header">
+      <div class="card-icon bg-blue">N</div>
+      <div>
+        <div class="card-title">Next.js 15</div>
+        <div class="card-subtitle">App Router + Tailwind</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>React 19 server components</li>
+      <li>Fraunces + DM Sans typography</li>
+      <li>CSS-only animations</li>
+      <li>Mobile-first (375px base)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-cyan">7 SCREENS</div>
+    <div class="card-header">
+      <div class="card-icon bg-cyan">R</div>
+      <div>
+        <div class="card-title">React Components</div>
+        <div class="card-subtitle">Composable UI</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Planet <span class="arrow">→</span> SVG + sprite rendering</li>
+      <li>HabitRow <span class="arrow">→</span> status + medallion</li>
+      <li>UrgeModal <span class="arrow">→</span> 3-option flow</li>
+      <li>MilestoneCoin <span class="arrow">→</span> SVG component</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-amber">PIXEL ART</div>
+    <div class="card-header">
+      <div class="card-icon bg-amber">A</div>
+      <div>
+        <div class="card-title">Asset System</div>
+        <div class="card-subtitle">Sprout Lands pack</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>25 creature sprites × 5 stages</li>
+      <li>35+ decoration sprites</li>
+      <li>CSS <span class="highlight">hue-rotate</span> for colors</li>
+      <li>image-rendering: pixelated</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-green">LUCIDE</div>
+    <div class="card-header">
+      <div class="card-icon bg-green">I</div>
+      <div>
+        <div class="card-title">Icon System</div>
+        <div class="card-subtitle">Zero emoji policy</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Lucide React (strokeWidth 1.5)</li>
+      <li>Custom SVG milestone coins</li>
+      <li>Shield icon for quit habits</li>
+      <li>Consistent 16–24px sizing</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="connector">
+  <div class="connector-pill">L O C A L &nbsp; S T O R A G E</div>
+</div>
+
+<!-- ═══════════════ GAME SYSTEMS ═══════════════ -->
+<div class="layer-label">G A M E &nbsp; S Y S T E M S</div>
+<div class="card-grid">
+
+  <div class="card">
+    <div class="card-badge badge-amber">13 TIERS</div>
+    <div class="card-header">
+      <div class="card-icon bg-amber">M</div>
+      <div>
+        <div class="card-title">Milestone Engine</div>
+        <div class="card-subtitle">AA-style coins</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Hour milestones <span class="arrow">→</span> 2h, 6h, 12h, 24h, 48h, 72h</li>
+      <li>Day milestones <span class="arrow">→</span> 7d to 365d</li>
+      <li>Color: stone <span class="arrow">→</span> bronze <span class="arrow">→</span> gold</li>
+      <li>Re-earnable on quit reset</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-green">ECONOMY</div>
+    <div class="card-header">
+      <div class="card-icon bg-green">C</div>
+      <div>
+        <div class="card-title">Coin System</div>
+        <div class="card-subtitle">Earn and spend</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>250 starting coins</li>
+      <li>+3 per urge survived</li>
+      <li>+coins per milestone tier</li>
+      <li>Spend in World Shop</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-purple">CSS ONLY</div>
+    <div class="card-header">
+      <div class="card-icon bg-purple">E</div>
+      <div>
+        <div class="card-title">Egg Progression</div>
+        <div class="card-subtitle">72-hour hatch cycle</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Phase: fresh <span class="arrow">→</span> stirring <span class="arrow">→</span> cracking <span class="arrow">→</span> hatching</li>
+      <li>Crack overlays via ::after</li>
+      <li>Wobble + shake + sparkle</li>
+      <li>Urge survival reduces hatch time</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-rose">4 STATES</div>
+    <div class="card-header">
+      <div class="card-icon bg-rose">R</div>
+      <div>
+        <div class="card-title">Creature Moods</div>
+        <div class="card-subtitle">Tamagotchi hook</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li><span class="highlight">Healthy</span> <span class="arrow">→</span> bob + blink</li>
+      <li><span class="highlight">Neglected</span> <span class="arrow">→</span> droopy + desaturated</li>
+      <li><span class="highlight">Thriving</span> <span class="arrow">→</span> sparkles + scale 1.05</li>
+      <li><span class="highlight">Sleeping</span> <span class="arrow">→</span> ZZZ + still</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="connector">
+  <div class="connector-pill">R E A C T &nbsp; S T A T E</div>
+</div>
+
+<!-- ═══════════════ DATA ═══════════════ -->
+<div class="layer-label">D A T A</div>
+<div class="card-grid">
+
+  <div class="card">
+    <div class="card-badge badge-green">LOCAL</div>
+    <div class="card-header">
+      <div class="card-icon bg-green">S</div>
+      <div>
+        <div class="card-title">Storage</div>
+        <div class="card-subtitle">Zero-server architecture</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Web <span class="arrow">→</span> localStorage</li>
+      <li>Native <span class="arrow">→</span> AsyncStorage</li>
+      <li>Save on every state change</li>
+      <li>No cloud sync (v1)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-blue">HABITS</div>
+    <div class="card-header">
+      <div class="card-icon bg-blue">H</div>
+      <div>
+        <div class="card-title">Habit Records</div>
+        <div class="card-subtitle">Core data model</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>id, name, type, color, dates</li>
+      <li>Completions map (id:date)</li>
+      <li>Creature stage + evolution</li>
+      <li>Pause state + reason text</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-rose">JOURNAL</div>
+    <div class="card-header">
+      <div class="card-icon bg-rose">U</div>
+      <div>
+        <div class="card-title">Urge Log</div>
+        <div class="card-subtitle">Trigger patterns</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>habitId + timestamp</li>
+      <li>Tags: Stress, Boredom, Social...</li>
+      <li>Free-text note</li>
+      <li>Method used + survived flag</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-amber">PROGRESS</div>
+    <div class="card-header">
+      <div class="card-icon bg-amber">P</div>
+      <div>
+        <div class="card-title">Progress State</div>
+        <div class="card-subtitle">Coins + milestones</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Coin balance + transaction log</li>
+      <li>Milestone earned flags</li>
+      <li>Owned shop items</li>
+      <li>Tend+ subscription state</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="connector">
+  <div class="connector-pill">P R I V A C Y &nbsp; F I R S T</div>
+</div>
+
+<!-- ═══════════════ DEPLOYMENT ═══════════════ -->
+<div class="layer-label">D E P L O Y M E N T</div>
+<div class="card-grid three">
+
+  <div class="card">
+    <div class="card-badge badge-blue">WEB</div>
+    <div class="card-header">
+      <div class="card-icon bg-blue">V</div>
+      <div>
+        <div class="card-title">Vercel</div>
+        <div class="card-subtitle">Edge deployment</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Automatic deploy on push</li>
+      <li>Preview branches</li>
+      <li>Edge functions (if needed)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-purple">iOS</div>
+    <div class="card-header">
+      <div class="card-icon bg-purple">A</div>
+      <div>
+        <div class="card-title">App Store</div>
+        <div class="card-subtitle">React Native + Expo</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Expo managed workflow</li>
+      <li>StoreKit for subscriptions</li>
+      <li>TestFlight <span class="arrow">→</span> production</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-badge badge-orange">PAYMENTS</div>
+    <div class="card-header">
+      <div class="card-icon bg-orange">$</div>
+      <div>
+        <div class="card-title">Billing</div>
+        <div class="card-subtitle">Multi-platform</div>
+      </div>
+    </div>
+    <ul class="card-list">
+      <li>Web <span class="arrow">→</span> Stripe Checkout</li>
+      <li>iOS <span class="arrow">→</span> StoreKit / RevenueCat</li>
+      <li>Monthly ($4.99) + Annual ($29.99)</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ═══════════════ TECH STACK PILLS ═══════════════ -->
+<div class="tech-stack">
+  <span class="tech-pill" style="background:rgba(255,255,255,0.06); color:white;">Next.js 15</span>
+  <span class="tech-pill" style="background:rgba(96,165,250,0.15); color:#60a5fa;">React 19</span>
+  <span class="tech-pill" style="background:rgba(56,189,248,0.15); color:#38bdf8;">Tailwind CSS</span>
+  <span class="tech-pill" style="background:rgba(251,191,36,0.15); color:#fbbf24;">Fraunces</span>
+  <span class="tech-pill" style="background:rgba(255,255,255,0.06); color:white;">DM Sans</span>
+  <span class="tech-pill" style="background:rgba(74,222,128,0.15); color:#4ade80;">Lucide</span>
+  <span class="tech-pill" style="background:rgba(251,146,60,0.15); color:#fb923c;">Sprout Lands</span>
+  <span class="tech-pill" style="background:rgba(167,139,250,0.15); color:#a78bfa;">localStorage</span>
+  <span class="tech-pill" style="background:rgba(251,113,133,0.15); color:#fb7185;">Stripe</span>
+  <span class="tech-pill" style="background:rgba(255,255,255,0.06); color:white;">Vercel</span>
+  <span class="tech-pill" style="background:rgba(96,165,250,0.15); color:#60a5fa;">Expo</span>
+  <span class="tech-pill" style="background:rgba(74,222,128,0.15); color:#4ade80;">StoreKit</span>
+</div>
+
+</body>
+</html>
