@@ -114,9 +114,14 @@ export function TendPlusScreen({ onClose, onSubscribe }: TendPlusScreenProps) {
               fontSize: 16, fontWeight: 600, cursor: "pointer",
               fontFamily: "inherit",
               transition: "transform 0.1s",
+              position: "relative", zIndex: 10,
+              pointerEvents: "auto",
+              WebkitTapHighlightColor: "transparent",
             }}
             onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
             onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            onTouchStart={(e) => (e.currentTarget.style.transform = "scale(0.97)")}
+            onTouchEnd={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
           >
             Start Tend+
           </button>
@@ -126,10 +131,15 @@ export function TendPlusScreen({ onClose, onSubscribe }: TendPlusScreenProps) {
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <button
             onClick={() => onSubscribe("monthly")}
+            onTouchStart={(e) => { e.currentTarget.style.opacity = "0.6"; }}
+            onTouchEnd={(e) => { e.currentTarget.style.opacity = "1"; }}
             style={{
               background: "none", border: "none", cursor: "pointer",
               fontSize: 14, color: "rgba(255,255,255,0.4)",
               fontFamily: "inherit", padding: "8px 16px",
+              position: "relative", zIndex: 10,
+              pointerEvents: "auto",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             $4.99 / month

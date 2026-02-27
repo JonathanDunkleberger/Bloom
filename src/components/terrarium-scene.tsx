@@ -114,10 +114,11 @@ export function TerrariumScene({
       position: "relative", width: "100%",
       aspectRatio: "1 / 1",
       maxHeight: 380,
-      borderRadius: 22, overflow: "hidden",
+      borderRadius: 22, overflow: "visible",
       background: `radial-gradient(ellipse at 50% 60%, ${sky[2]} 0%, ${sky[1]} 40%, ${sky[0]} 100%)`,
       transition: "background 1.5s ease",
       boxShadow: "0 2px 24px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05)",
+      clipPath: "inset(-2px round 22px)",
     }}>
       <svg width="100%" height="100%" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style={{ position: "absolute", inset: 0 }}>
         <defs>
@@ -385,23 +386,27 @@ export function TerrariumScene({
                   transform={`rotate(${-rotDeg})`}
                   style={{ overflow: "visible" }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={spritePath}
-                    alt={h.name}
-                    width={scaledSz}
-                    height={scaledSz}
-                    style={{
-                      imageRendering: "pixelated",
-                      display: "block",
-                      filter: moodFilter,
-                      transition: "filter 0.5s ease, transform 0.3s ease",
-                      animation: mood === "healthy" || mood === "thriving"
-                        ? `creatureBlink 4s ease-in-out infinite ${1 + r() * 3}s`
-                        : undefined,
-                    }}
-                    draggable={false}
-                  />
+                  <div style={{ width: scaledSz, height: scaledSz }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={spritePath}
+                      alt={h.name}
+                      width={scaledSz}
+                      height={scaledSz}
+                      style={{
+                        imageRendering: "pixelated",
+                        display: "block",
+                        width: scaledSz,
+                        height: scaledSz,
+                        filter: moodFilter,
+                        transition: "filter 0.5s ease, transform 0.3s ease",
+                        animation: mood === "healthy" || mood === "thriving"
+                          ? `creatureBlink 4s ease-in-out infinite ${1 + r() * 3}s`
+                          : undefined,
+                      }}
+                      draggable={false}
+                    />
+                  </div>
                 </foreignObject>
                 {/* Name label — always horizontal (counter-rotate), below sprite */}
                 <foreignObject

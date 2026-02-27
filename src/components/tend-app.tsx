@@ -231,9 +231,9 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     }
   }, []);
 
-  // Live timer — updates every 60s for quit detail pages
+  // Live timer — updates every 10s for quit detail pages (shows minutes)
   useEffect(() => {
-    const interval = setInterval(() => setLiveNow(Date.now()), 60000);
+    const interval = setInterval(() => setLiveNow(Date.now()), 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1269,7 +1269,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
 
         {/* ═══ MAIN ═══ */}
         {page === "main" && (
-          <div style={fs}>
+          <div style={{ ...fs, paddingBottom: 90 }}>
             <div ref={terRef} style={{ position: "relative" }}>
               <TerrariumScene
                 habits={habits} getStage={getStageForId} isHappy={isHappy}
@@ -1499,10 +1499,12 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                   const total = getTotal(h.id);
                   const isLast = idx === habits.length - 1;
 
-                  // Hours clean for quit habits in first 24h
-                  const hoursSinceQuit = quit && qd?.quitDate
-                    ? Math.floor((Date.now() - new Date(qd.quitDate).getTime()) / (1000 * 60 * 60))
+                  // Hours and minutes clean for quit habits in first 24h
+                  const msSinceQuit = quit && qd?.quitDate
+                    ? Date.now() - new Date(qd.quitDate).getTime()
                     : 0;
+                  const hoursSinceQuit = Math.floor(msSinceQuit / (1000 * 60 * 60));
+                  const minutesSinceQuit = Math.floor(msSinceQuit / (1000 * 60));
 
                   // Build subtitle
                   let subtitle = "";
@@ -1510,7 +1512,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                     subtitle = "Paused";
                   } else if (quit && qd?.quitDate) {
                     const timeStr = cleanDays === 0
-                      ? (hoursSinceQuit > 0 ? `${hoursSinceQuit}h clean` : "Just started")
+                      ? (hoursSinceQuit > 0 ? `${hoursSinceQuit}h clean` : `${Math.max(minutesSinceQuit, 0)}m clean`)
                       : cleanDays === 1 ? "1d clean" : `${fmtDuration(cleanDays)} clean`;
                     subtitle = timeStr;
                     if (moneySaved > 0) subtitle += ` · ${fmtMoney(moneySaved)} saved`;
@@ -1615,10 +1617,10 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                             </div>
                           )}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
                           {/* Milestone coin badge */}
                           {!isPaused && (earnedMilestoneCoins[h.id] || []).length > 0 && (
-                            <div onClick={() => { setDetailId(h.id); setPage("detail"); }} style={{ cursor: "pointer" }}>
+                            <div onClick={() => { setDetailId(h.id); setPage("detail"); }} style={{ cursor: "pointer", flexShrink: 0 }}>
                               <CoinBadge earnedCoins={earnedMilestoneCoins[h.id]} isQuit={quit} />
                             </div>
                           )}
@@ -1711,7 +1713,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
           const dqd = dq ? getQuitData(detailHabit.id) : undefined;
           const urges = dqd?.urges || [];
           return (
-          <div style={{ animation: "fadeUp 0.28s ease" }}>
+          <div style={{ animation: "fadeUp 0.28s ease", paddingBottom: 100 }}>
             <div
               className="cd"
               style={{
@@ -1804,7 +1806,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                 const timer = dqd?.quitDate ? formatLiveTimer(dqd.quitDate, liveNow) : null;
                 return (
                 <div style={{ marginTop: 14 }}>
-                  {cleanD === 0 && timer && timer.totalHours < 24 ? (
+                  {cleanD === 0 && timer && timer.totalHours >= 1 && timer.totalHours < 24 ? (
                     <>
                       <div style={{ fontFamily: "'Fraunces',serif", fontSize: 56, fontWeight: 700, color: "white", letterSpacing: "-1px", lineHeight: 1 }}>
                         {timer.totalHours}
@@ -1823,6 +1825,18 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                           {fmtQuitDate(dqd.quitDate)}
                         </div>
                       )}
+                    </>
+                  ) : cleanD === 0 && timer ? (
+                    <>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 56, fontWeight: 700, color: "white", letterSpacing: "-1px", lineHeight: 1 }}>
+                        {timer.minutes}
+                      </div>
+                      <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", fontWeight: 500, marginTop: 2 }}>
+                        {timer.minutes === 1 ? "minute clean" : "minutes clean"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", fontWeight: 500, marginTop: 4, fontStyle: "italic" }}>
+                        you got this
+                      </div>
                     </>
                   ) : cleanD === 0 ? (
                     <>
