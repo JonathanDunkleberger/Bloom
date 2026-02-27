@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check, Plus, X, Flame, ChevronLeft, Coins, Sparkles,
-  Pencil, Shield, Sun, Moon, LayoutGrid,
+  Pencil, Shield, Sun, Moon, LayoutGrid, Crown,
   Users, RefreshCw, Wind, DollarSign, Heart,
   Sunrise, SunMedium, MoonStar, Menu, Store, Pause, Play,
 } from "lucide-react";
@@ -1077,12 +1077,33 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       {showPaywall && (
         <TendPlusScreen
           onClose={() => setShowPaywall(false)}
-          onSubscribe={(plan) => {
-            // For now (dev/testing), just enable Tend+
-            setIsPro(true);
-            setProExpiry(new Date(Date.now() + (plan === "annual" ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString());
-            setShowPaywall(false);
-            setCoinToast({ msg: "Welcome to Tend+!", icon: Sparkles });
+          onSubscribe={async (plan) => {
+            try {
+              const res = await fetch("/api/checkout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ plan }),
+              });
+              const data = await res.json();
+
+              if (data.url) {
+                // Stripe checkout — redirect to payment page
+                window.location.href = data.url;
+                return;
+              }
+
+              // Dev mode or fallback — activate locally
+              setIsPro(true);
+              setProExpiry(new Date(Date.now() + (plan === "annual" ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString());
+              setShowPaywall(false);
+              setCoinToast({ msg: "Welcome to Tend+!", icon: Sparkles });
+            } catch {
+              // Network error — activate locally so user is never stuck
+              setIsPro(true);
+              setProExpiry(new Date(Date.now() + (plan === "annual" ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString());
+              setShowPaywall(false);
+              setCoinToast({ msg: "Welcome to Tend+!", icon: Sparkles });
+            }
           }}
         />
       )}
@@ -1207,6 +1228,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                 </button>
               </div>
               {[
+                ...(!isTendPlus() ? [{ label: "Upgrade to Tend+", Icon: Crown, color: "#4ade80", action: () => { setShowPaywall(true); setMenuOpen(false); } }] : []),
                 { label: "Collection", Icon: LayoutGrid, color: th.textSub, action: () => { setPage("gallery"); setMenuOpen(false); } },
                 { label: "Insights", Icon: Sparkles, color: "#8B5CF6", action: () => { setPage("constellation"); setMenuOpen(false); } },
                 { label: "Breathe", Icon: Wind, color: "#38bdf8", action: () => { setShowBreathe(true); setMenuOpen(false); } },
