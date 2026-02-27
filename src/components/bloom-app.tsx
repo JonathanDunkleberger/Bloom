@@ -24,7 +24,9 @@ import { ReasonEditor } from "@/components/reason-editor";
 import { Shop } from "@/components/shop";
 import { UrgeSupport } from "@/components/urge-support";
 import { BloomPlusScreen, BloomPlusMiniPrompt, SevenDayCelebration } from "@/components/bloom-plus-screen";
-import { getStage, getIcon, today, daysAgo, daysBetween, fmtDuration, fmtMoney, fmtQuitDate } from "@/lib/utils";
+import { Onboarding } from "@/components/onboarding";
+import { MultiHabitHeatmap } from "@/components/multi-habit-heatmap";
+import { getStage, getIcon, today, daysAgo, daysBetween, fmtDuration, fmtMoney, fmtQuitDate, haptic, getGreeting, formatLiveTimer } from "@/lib/utils";
 import {
   MILESTONES, STAGE_LABELS, STAGE_THRESHOLDS,
   PRESETS, PRESET_CATEGORIES, HABIT_COLORS, FREE_HABIT_LIMIT,
@@ -63,7 +65,6 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const [cName, setCName] = useState("");
   const [cColor, setCColor] = useState("#6366f1");
   const [mounted, setMounted] = useState(false);
-  const [prevAllDone, setPrevAllDone] = useState(false);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [daysAwayCnt, setDaysAwayCnt] = useState(0);
   const [bounceBackDay, setBounceBackDay] = useState(0);
@@ -86,6 +87,22 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const [showPremiumPrompt, setShowPremiumPrompt] = useState(false);
   const [sevenDayCelebration, setSevenDayCelebration] = useState<{ habitName: string; moneySaved: number; urgeCount: number } | null>(null);
   const logoTapRef = useRef<{ count: number; timer: ReturnType<typeof setTimeout> | null }>({ count: 0, timer: null });
+
+  // ── Onboarding state ──
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [appLoading, setAppLoading] = useState(true);
+
+  // ── All-done celebration state ──
+  const [showAurora, setShowAurora] = useState(false);
+  const [celebrationActive, setCelebrationActive] = useState(false);
+  const [celebrationBanner, setCelebrationBanner] = useState(false);
+  const [celebrationBannerFading, setCelebrationBannerFading] = useState(false);
+  const [shootingStar, setShootingStar] = useState(false);
+  const [creatureBounce, setCreatureBounce] = useState(false);
+  const prevAllDoneRef = useRef(false);
+
+  // ── Live timer for quit detail ──
+  const [liveNow, setLiveNow] = useState(Date.now());
 
   const isBloomPlus = useCallback((): boolean => {
     if (!isPro) return false;
@@ -143,20 +160,44 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       if (savedExpiry) setProExpiry(savedExpiry);
       const savedBonus = localStorage.getItem("bloom_last_bonus");
       if (savedBonus) setLastBonusDate(savedBonus);
+
+      // Check onboarding
+      const onboardingDone = localStorage.getItem("bloom_onboarding_complete");
+      if (!onboardingDone && initialHabits.length === 0) {
+        setShowOnboarding(true);
+      }
+
+      setAppLoading(false);
     }
   }, []);
 
-  // Persist quit data
+  // Live timer — updates every 60s for quit detail pages
+  useEffect(() => {
+    const interval = setInterval(() => setLiveNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Persist quit data with verification
   useEffect(() => {
     if (typeof window !== "undefined" && Object.keys(quitDataMap).length > 0) {
-      localStorage.setItem("bloom_quit_data", JSON.stringify(quitDataMap));
+      const data = JSON.stringify(quitDataMap);
+      localStorage.setItem("bloom_quit_data", data);
+      if (process.env.NODE_ENV === "development") {
+        const readBack = localStorage.getItem("bloom_quit_data");
+        if (!readBack) console.error("SAVE FAILED: quit data not persisted");
+      }
     }
   }, [quitDataMap]);
 
-  // Persist owned items
+  // Persist owned items with verification
   useEffect(() => {
     if (typeof window !== "undefined" && ownedItems.length > 0) {
-      localStorage.setItem("bloom_owned_items", JSON.stringify(ownedItems));
+      const data = JSON.stringify(ownedItems);
+      localStorage.setItem("bloom_owned_items", data);
+      if (process.env.NODE_ENV === "development") {
+        const readBack = localStorage.getItem("bloom_owned_items");
+        if (!readBack) console.error("SAVE FAILED: owned items not persisted");
+      }
     }
   }, [ownedItems]);
 
@@ -366,14 +407,39 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const todayPct = habits.length ? totalToday / habits.length : 0;
   const allDone = todayPct >= 1 && habits.length > 0;
 
-  // Confetti trigger
+  // All-done celebration + aurora
   useEffect(() => {
-    if (allDone && !prevAllDone) {
+    setShowAurora(allDone);
+    if (allDone && !prevAllDoneRef.current) {
+      // Trigger one-time celebration sequence
+      haptic("success");
       setConfetti(true);
       setTimeout(() => setConfetti(false), 3000);
+      // Creature bounce at 300ms
+      setTimeout(() => { setCreatureBounce(true); setTimeout(() => setCreatureBounce(false), 500); }, 300);
+      // Shooting star at 500ms
+      setTimeout(() => { setShootingStar(true); setTimeout(() => setShootingStar(false), 900); }, 500);
+      // Banner at 800ms
+      setTimeout(() => {
+        setCelebrationBanner(true);
+        // Auto-dismiss after 4s
+        setTimeout(() => {
+          setCelebrationBannerFading(true);
+          setTimeout(() => { setCelebrationBanner(false); setCelebrationBannerFading(false); }, 300);
+        }, 4000);
+      }, 800);
+      // +10 coins at 1200ms
+      setTimeout(() => {
+        setCoins((p) => {
+          const nv = p + 10;
+          fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
+          return nv;
+        });
+        setCoinToast({ msg: "+10 all habits done!", icon: Sparkles });
+      }, 1200);
     }
-    setPrevAllDone(allDone);
-  }, [allDone, prevAllDone]);
+    prevAllDoneRef.current = allDone;
+  }, [allDone]);
 
   const checkMilestones = (habitId: string, streak: number) => {
     let nc = 0;
@@ -388,6 +454,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       }
     }
     if (nc > 0) {
+      haptic("medium");
       setCoins((prev) => {
         const newCoins = prev + nc;
         fetch("/api/coins", {
@@ -462,6 +529,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
   const toggleCompletion = async (hId: string) => {
     const wasComplete = isHappy(hId);
 
+    haptic("light");
     setBouncingId(hId);
     setTimeout(() => setBouncingId(null), 600);
 
@@ -592,6 +660,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
     if (!item || ownedItems.includes(itemId)) return;
     if (coins < item.price) return;
     setOwnedItems((prev) => [...prev, itemId]);
+    haptic("light");
     setCoinToast({ msg: `${item.name} placed on your planet!`, icon: Store });
     setCoins((prev) => {
       const newCoins = prev - item.price;
@@ -643,6 +712,29 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
     ? { opacity: 1, transform: "translateY(0)", transition: "all 0.4s cubic-bezier(0.16,1,0.3,1)" }
     : { opacity: 0, transform: "translateY(5px)" };
 
+  // ── Onboarding completion handler ──
+  const handleOnboardingComplete = async (
+    quitPick: { name: string; color: string; iconName: string; cost: number } | null,
+    buildPick: { name: string; color: string; iconName: string } | null,
+  ) => {
+    // Set 250 starting coins
+    setCoins(250);
+    fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: 250 }) }).catch(() => {});
+
+    // Create quit habit
+    if (quitPick) {
+      await addHabit(quitPick.name, quitPick.color, quitPick.iconName, "quit", quitPick.cost);
+    }
+    // Create build habit
+    if (buildPick) {
+      await addHabit(buildPick.name, buildPick.color, buildPick.iconName);
+    }
+
+    // Mark onboarding complete
+    localStorage.setItem("bloom_onboarding_complete", "1");
+    setShowOnboarding(false);
+  };
+
   const overallHeatData = useCallback(
     (date: string) => {
       if (!habits.length) return 0;
@@ -667,6 +759,21 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
       color: th.text,
       transition: "background .4s, color .4s",
     }}>
+      {/* Onboarding flow */}
+      {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+
+      {/* Loading splash */}
+      {appLoading && (
+        <div style={{
+          position: "fixed", inset: 0, background: "#0a0e18", zIndex: 9998,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 700, color: "white" }}>
+            b<span style={{ color: "#4ade80" }}>.</span>
+          </span>
+        </div>
+      )}
+
       <Confetti active={confetti} />
       {coinToast && <CoinToast {...coinToast} onDone={() => setCoinToast(null)} />}
       {undoToast && <UndoToast {...undoToast} onDone={() => setUndoToast(null)} />}
@@ -689,6 +796,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
             Object.values(quitDataMap).reduce((sum, qd) => sum + (qd.urges || []).filter((d) => d === todayStr).length, 0)
           }
           onComplete={(data) => {
+            haptic("success");
             logUrge(urgeSupportHabit.id);
             setCoins((p) => {
               const nv = p + 3;
@@ -763,7 +871,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
           ) : (
             <h1
               onClick={onLogoTap}
-              style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 600, letterSpacing: "-0.5px", color: th.text, cursor: "default", userSelect: "none" }}
+              style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, letterSpacing: "-0.5px", color: th.text, cursor: "default", userSelect: "none" }}
             >
               bloom<span style={{ color: "#4caf50" }}>.</span>
               {isBloomPlus() && <span style={{ fontSize: 10, fontWeight: 700, color: "#4ade80", marginLeft: 3, verticalAlign: "super" }}>+</span>}
@@ -883,6 +991,58 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 ownedItems={ownedItems}
                 onCreatureTap={(hId) => { setDetailId(hId); setPage("detail"); }}
               />
+              {/* Aurora effect — visible when all habits done */}
+              {showAurora && (
+                <div style={{
+                  position: "absolute", top: 0, left: 0, right: 0, height: 80,
+                  pointerEvents: "none", zIndex: 4,
+                  opacity: showAurora ? 1 : 0, transition: "opacity 0.3s ease",
+                }}>
+                  <div style={{
+                    position: "absolute", top: 10, left: "10%", right: "10%", height: 20,
+                    borderRadius: "50%", background: "rgba(74, 222, 128, 0.15)",
+                    filter: "blur(8px)", animation: "auroraWave 3s ease-in-out infinite",
+                  }} />
+                  <div style={{
+                    position: "absolute", top: 20, left: "15%", right: "15%", height: 16,
+                    borderRadius: "50%", background: "rgba(147, 130, 255, 0.12)",
+                    filter: "blur(6px)", animation: "auroraWave 3s ease-in-out infinite 0.3s",
+                  }} />
+                  <div style={{
+                    position: "absolute", top: 30, left: "20%", right: "20%", height: 12,
+                    borderRadius: "50%", background: "rgba(255, 200, 100, 0.10)",
+                    filter: "blur(5px)", animation: "auroraWave 3s ease-in-out infinite 0.6s",
+                  }} />
+                </div>
+              )}
+              {/* Shooting star */}
+              {shootingStar && (
+                <div style={{
+                  position: "absolute", top: 20, left: 0, right: 0, height: 40,
+                  pointerEvents: "none", zIndex: 4, overflow: "hidden",
+                }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: "50%",
+                    background: "white", boxShadow: "0 0 8px white, -12px 3px 12px rgba(255,255,255,0.3)",
+                    animation: "shootingStar 0.8s linear forwards",
+                  }} />
+                </div>
+              )}
+              {/* Celebration banner */}
+              {celebrationBanner && (
+                <div style={{
+                  position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
+                  zIndex: 10, animation: celebrationBannerFading ? "bannerFadeOut 0.3s ease forwards" : "bannerSlideDown 0.4s ease",
+                  background: "rgba(74, 222, 128, 0.1)", border: "1px solid rgba(74, 222, 128, 0.2)",
+                  borderRadius: 10, padding: "8px 16px", whiteSpace: "nowrap",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2">
+                    <path d="M12 3l1.5 5.5L19 10l-4.5 2.5L16 18l-4-3-4 3 1.5-5.5L5 10l5.5-1.5z" />
+                  </svg>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#4ade80" }}>All habits complete today</span>
+                </div>
+              )}
               {/* Mood indicator — minimal pill with SVG icon */}
               {habits.length > 0 && (() => {
                 const status = allDone ? { label: "Thriving", color: "#66FFAA", glow: true } :
@@ -922,7 +1082,11 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                       ? "linear-gradient(90deg,#66bb6a,#43a047)"
                       : "linear-gradient(90deg,#81c784,#4caf50)",
                     width: `${todayPct * 100}%`,
-                    transition: "width 0.5s cubic-bezier(0.16,1,0.3,1)",
+                    transition: "width 400ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+                    ...(allDone ? {
+                      boxShadow: "0 0 12px rgba(74, 222, 128, 0.4)",
+                      animation: "progressGlow 1.5s ease-in-out",
+                    } : {}),
                   }} />
                 </div>
               </div>
@@ -956,11 +1120,13 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
             {/* Gentle time-of-day nudge */}
             {buildHabits.length > 0 && buildHabits.filter((h) => isHappy(h.id)).length === 0 && (() => {
               const hr = new Date().getHours();
-              const nudge = hr < 12
+              const nudge = hr >= 5 && hr < 12
                 ? { Icon: Sunrise, msg: "Good morning! A small step forward today?" }
-                : hr < 17
+                : hr >= 12 && hr < 17
                   ? { Icon: SunMedium, msg: "Afternoon check-in — any habits to bloom?" }
-                  : { Icon: MoonStar, msg: "Evening wind-down — still time to grow today" };
+                  : hr >= 17 && hr < 21
+                    ? { Icon: MoonStar, msg: "Evening wind-down — still time to grow today" }
+                    : { Icon: MoonStar, msg: "Late night. Be gentle with yourself." };
               return (
                 <div style={{
                   margin: "8px 2px 0", padding: "10px 14px", borderRadius: 12,
@@ -985,18 +1151,11 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 </span>
               </div>
               {/* Compassionate welcome message */}
-              {habits.length > 0 && (() => {
-                const hr = new Date().getHours();
-                const msg = hr < 12 ? "Good morning. One day at a time."
-                  : hr < 17 ? "Keep going. You\u2019re doing great."
-                  : hr < 21 ? "Almost through today. You\u2019ve got this."
-                  : "Rest well. Tomorrow is another victory.";
-                return (
+              {habits.length > 0 && (
                   <div style={{ padding: "0 14px 8px", textAlign: "center" }}>
-                    <span style={{ fontSize: 12, fontStyle: "italic", color: darkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)" }}>{msg}</span>
+                    <span style={{ fontSize: 12, fontStyle: "italic", color: darkMode ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)" }}>{getGreeting()}</span>
                   </div>
-                );
-              })()}
+              )}
               {habits.length === 0 ? (
                 <div style={{ padding: "36px 20px", textAlign: "center" }}>
                   <p style={{ fontSize: 13, color: th.textMuted }}>Tap + to add your first habit</p>
@@ -1183,8 +1342,8 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 padding: "12px 10px", marginTop: 10,
                 background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
               }}>
-                <div className="lb" style={{ padding: "0 4px 8px", color: th.label }}>Activity</div>
-                <Heatmap getData={overallHeatData} color="#4caf50" heatEmpty={th.heatEmpty} labelColor={th.label} legendColor={th.textFaint} />
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, padding: "0 4px 8px", color: "rgba(255,255,255,0.25)" }}>Activity</div>
+                <Heatmap getData={overallHeatData} weeks={12} color="#4caf50" heatEmpty={th.heatEmpty} labelColor={th.label} legendColor={th.textFaint} />
               </div>
             )}
           </div>
@@ -1266,7 +1425,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
               ) : (
                 <>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 6 }}>
-                    <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 500, color: th.text }}>{detailHabit.name}</h2>
+                    <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 600, color: th.text }}>{detailHabit.name}</h2>
                     <button
                       onClick={() => { setEditMode(true); setEditName(detailHabit.name); setEditColor(detailHabit.color); }}
                       style={{ background: th.progressBg, border: "none", borderRadius: 6, padding: 4, cursor: "pointer", display: "flex" }}
@@ -1285,30 +1444,57 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                 </>
               )}
 
-              {/* Quit hero numbers */}
-              {dq && !editMode && (
+              {/* Quit hero numbers + live timer */}
+              {dq && !editMode && (() => {
+                const timer = dqd?.quitDate ? formatLiveTimer(dqd.quitDate, liveNow) : null;
+                return (
                 <div style={{ marginTop: 14 }}>
-                  {cleanD === 0 ? (
+                  {cleanD === 0 && timer && timer.totalHours < 24 ? (
+                    <>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 56, fontWeight: 700, color: "white", letterSpacing: "-1px", lineHeight: 1 }}>
+                        {timer.totalHours}
+                      </div>
+                      <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", fontWeight: 500, marginTop: 2 }}>
+                        {timer.totalHours === 1 ? "hour clean" : "hours clean"}
+                      </div>
+                      <div style={{
+                        fontSize: 14, color: "rgba(255,255,255,0.3)", fontWeight: 500, marginTop: 4,
+                        animation: "livePulse 4s ease infinite",
+                      }}>
+                        {timer.totalHours}h {timer.minutes}m
+                      </div>
+                      {dqd?.quitDate && (
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.2)", marginTop: 4 }}>
+                          {fmtQuitDate(dqd.quitDate)}
+                        </div>
+                      )}
+                    </>
+                  ) : cleanD === 0 ? (
                     <>
                       <div style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 600, color: detailHabit.color, lineHeight: 1.2 }}>
                         Just started
                       </div>
-                      <div style={{ fontSize: 12, color: th.textMuted, fontWeight: 500, marginTop: 4 }}>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", fontWeight: 500, marginTop: 4 }}>
                         you got this
                       </div>
                     </>
                   ) : (
                     <>
-                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 52, fontWeight: 700, color: detailHabit.color, letterSpacing: "-1px", lineHeight: 1 }}>
+                      <div style={{ fontFamily: "'Fraunces',serif", fontSize: 56, fontWeight: 700, color: "white", letterSpacing: "-1px", lineHeight: 1 }}>
                         {cleanD}
                       </div>
-                      <div style={{ fontSize: 12, color: th.textMuted, fontWeight: 500, marginTop: 2 }}>
+                      <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", fontWeight: 500, marginTop: 2 }}>
                         {cleanD === 1 ? "day clean" : "days clean"}
                       </div>
+                      {timer && (
+                        <div style={{
+                          fontSize: 14, color: "rgba(255,255,255,0.3)", fontWeight: 500, marginTop: 4,
+                          animation: "livePulse 4s ease infinite",
+                        }}>
+                          {timer.totalHours.toLocaleString()} hours · {timer.minutes} minutes
+                        </div>
+                      )}
                     </>
-                  )}
-                  {cleanD > 0 && (
-                    <div style={{ fontSize: 11, color: th.textFaint, marginTop: 2 }}>{fmtDuration(cleanD)}</div>
                   )}
                   {dqd && (dqd.dailyCost || 0) > 0 && cleanD > 0 && (
                     <div style={{ fontSize: 14, color: "#4caf50", fontWeight: 600, marginTop: 6 }}>
@@ -1316,7 +1502,8 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                     </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Stats — build habits only (before evolution bar) */}
               {!editMode && !dq && (
@@ -1376,7 +1563,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   >
                     <Wind size={16} color={detailHabit.color} />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: th.text }}>Breathe</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: th.text }}>Breathe</div>
                       <div style={{ fontSize: 10, color: th.textSub }}>Urge surfing</div>
                     </div>
                   </button>
@@ -1391,14 +1578,11 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   >
                     <RefreshCw size={16} color="#ef4444" />
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: th.text }}>Reset</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: th.text }}>Reset</div>
                       <div style={{ fontSize: 10, color: th.textSub }}>Start over</div>
                     </div>
                   </button>
                 </div>
-
-                {/* Divider */}
-                <div style={{ height: 1, background: th.cardBorder, margin: "6px 0 16px" }} />
 
                 {/* Reason editor */}
                 <div className="cd" style={{
@@ -1413,12 +1597,47 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                   />
                 </div>
 
+                {/* Activity heatmap — compact 12 weeks */}
+                <div className="cd" style={{
+                  padding: "12px 10px", marginBottom: 10,
+                  background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, padding: "0 4px 8px", color: "rgba(255,255,255,0.25)" }}>Activity</div>
+                  <Heatmap getData={detailHeatData} color={detailHabit.color} weeks={12} heatEmpty={th.heatEmpty} labelColor={th.label} legendColor={th.textFaint} />
+                </div>
+
                 {/* Healing timeline */}
                 <div className="cd" style={{
                   padding: 14, marginBottom: 10,
                   background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
                 }}>
                   <HealingTimeline habit={detailHabit} cleanDays={cleanD} th={th} />
+                </div>
+
+                {/* Milestones */}
+                <div className="cd" style={{
+                  padding: 14, marginBottom: 10,
+                  background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 8, color: "rgba(255,255,255,0.25)" }}>Milestones</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {MILESTONES.map((m) => {
+                      const e = !!earned[`${detailHabit.id}:${m.days}`];
+                      const Ic = getIcon(m.iconName);
+                      return (
+                        <div key={m.days} style={{
+                          display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
+                          borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: e ? th.streakActiveBg : th.hoverBg,
+                          color: e ? "#d97706" : th.textMuted,
+                          border: `1px solid ${e ? "rgba(245,158,11,.1)" : th.cardBorder}`,
+                          transition: "all 0.2s",
+                        }}>
+                          <Ic size={12} />{m.label}{e && <span style={{ opacity: 0.5 }}>+{m.coins}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Urge trend */}
@@ -1430,88 +1649,105 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
                     <UrgeTrend urgeLog={urges} color={detailHabit.color} th={th} />
                   </div>
                 )}
+
+                {/* Delete this habit — muted red text */}
+                <button
+                  onClick={() => setConfirmDeleteId(detailHabit.id)}
+                  style={{
+                    width: "100%", padding: 16, borderRadius: 12,
+                    border: "none", background: "transparent",
+                    color: "rgba(255,100,100,0.6)", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                    fontFamily: "inherit", transition: "all 0.12s",
+                    textAlign: "center",
+                  }}
+                >
+                  Delete this habit
+                </button>
               </>
             )}
 
-            {/* Streak freeze – build habits only */}
+            {/* ── Build-specific sections ── */}
             {!dq && (
-            <div className="cd" style={{
-              padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between",
-              background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Shield size={16} color="#42b4d6" />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: th.text }}>Streak Freeze</div>
-                  <div style={{ fontSize: 10, color: th.textSub }}>
-                    {(streakFreezes[detailHabit.id] || 0) > 0
-                      ? `${streakFreezes[detailHabit.id]} freeze${(streakFreezes[detailHabit.id] || 0) > 1 ? "s" : ""} active`
-                      : "Protect your streak from one missed day"}
+              <>
+                {/* Streak freeze */}
+                <div className="cd" style={{
+                  padding: 14, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Shield size={16} color="#42b4d6" />
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: th.text }}>Streak Freeze</div>
+                      <div style={{ fontSize: 10, color: th.textSub }}>
+                        {(streakFreezes[detailHabit.id] || 0) > 0
+                          ? `${streakFreezes[detailHabit.id]} freeze${(streakFreezes[detailHabit.id] || 0) > 1 ? "s" : ""} active`
+                          : "Protect your streak from one missed day"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="btn-s"
+                    onClick={() => buyFreeze(detailHabit.id)}
+                    style={{
+                      background: coins >= 50 ? th.freezeBtnBg : th.freezeBtnOff,
+                      color: coins >= 50 ? "#42b4d6" : th.textMuted,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <Coins size={11} /> 50
+                  </button>
+                </div>
+
+                {/* Activity heatmap — compact 12 weeks */}
+                <div className="cd" style={{
+                  padding: "12px 10px", marginBottom: 10,
+                  background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, padding: "0 4px 8px", color: "rgba(255,255,255,0.25)" }}>Activity</div>
+                  <Heatmap getData={detailHeatData} color={detailHabit.color} weeks={12} heatEmpty={th.heatEmpty} labelColor={th.label} legendColor={th.textFaint} />
+                </div>
+
+                {/* Milestones */}
+                <div className="cd" style={{
+                  padding: 14, marginBottom: 10,
+                  background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase" as const, marginBottom: 8, color: "rgba(255,255,255,0.25)" }}>Milestones</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {MILESTONES.map((m) => {
+                      const e = !!earned[`${detailHabit.id}:${m.days}`];
+                      const Ic = getIcon(m.iconName);
+                      return (
+                        <div key={m.days} style={{
+                          display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
+                          borderRadius: 10, fontSize: 11, fontWeight: 600,
+                          background: e ? th.streakActiveBg : th.hoverBg,
+                          color: e ? "#d97706" : th.textMuted,
+                          border: `1px solid ${e ? "rgba(245,158,11,.1)" : th.cardBorder}`,
+                          transition: "all 0.2s",
+                        }}>
+                          <Ic size={12} />{m.label}{e && <span style={{ opacity: 0.5 }}>+{m.coins}</span>}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-              <button
-                className="btn-s"
-                onClick={() => buyFreeze(detailHabit.id)}
-                style={{
-                  background: coins >= 50 ? th.freezeBtnBg : th.freezeBtnOff,
-                  color: coins >= 50 ? "#42b4d6" : th.textMuted,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <Coins size={11} /> 50
-              </button>
-            </div>
+
+                {/* Delete this habit — muted red text */}
+                <button
+                  onClick={() => setConfirmDeleteId(detailHabit.id)}
+                  style={{
+                    width: "100%", padding: 16, borderRadius: 12,
+                    border: "none", background: "transparent",
+                    color: "rgba(255,100,100,0.6)", fontSize: 12, fontWeight: 500, cursor: "pointer",
+                    fontFamily: "inherit", transition: "all 0.12s",
+                    textAlign: "center",
+                  }}
+                >
+                  Delete this habit
+                </button>
+              </>
             )}
-
-            {/* Activity heatmap */}
-            <div className="cd" style={{
-              padding: "12px 10px", marginBottom: 10,
-              background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
-            }}>
-              <div className="lb" style={{ padding: "0 4px 8px", color: th.label }}>Activity</div>
-              <Heatmap getData={detailHeatData} color={detailHabit.color} weeks={20} heatEmpty={th.heatEmpty} labelColor={th.label} legendColor={th.textFaint} />
-            </div>
-
-            {/* Milestones */}
-            <div className="cd" style={{
-              padding: 14, marginBottom: 10,
-              background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
-            }}>
-              <div className="lb" style={{ marginBottom: 8, color: th.label }}>Milestones</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                {MILESTONES.map((m) => {
-                  const e = !!earned[`${detailHabit.id}:${m.days}`];
-                  const Ic = getIcon(m.iconName);
-                  return (
-                    <div key={m.days} style={{
-                      display: "flex", alignItems: "center", gap: 5, padding: "5px 10px",
-                      borderRadius: 10, fontSize: 11, fontWeight: 600,
-                      background: e ? th.streakActiveBg : th.hoverBg,
-                      color: e ? "#d97706" : th.textMuted,
-                      border: `1px solid ${e ? "rgba(245,158,11,.1)" : th.cardBorder}`,
-                      transition: "all 0.2s",
-                    }}>
-                      <Ic size={12} />{m.label}{e && <span style={{ opacity: 0.5 }}>+{m.coins}</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Delete this habit — muted red text */}
-            <button
-              onClick={() => setConfirmDeleteId(detailHabit.id)}
-              style={{
-                width: "100%", padding: 16, borderRadius: 12,
-                border: "none", background: "transparent",
-                color: "rgba(255,100,100,0.6)", fontSize: 12, fontWeight: 500, cursor: "pointer",
-                fontFamily: "inherit", transition: "all 0.12s",
-                textAlign: "center",
-              }}
-            >
-              Delete this habit
-            </button>
           </div>
           );
         })()}
@@ -1526,6 +1762,10 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
         {/* ═══ CONSTELLATION ═══ */}
         {page === "constellation" && (
           <div style={{ animation: "fadeUp 0.28s ease" }}>
+            {/* Multi-habit heatmap — first section */}
+            {habits.length > 0 && (
+              <MultiHabitHeatmap habits={habits} isDone={isComplete} getCleanDays={getCleanDays} th={th} />
+            )}
             <Constellation habits={habits} isDone={isComplete} getStreak={getStreak} getTotal={getTotal} getCleanDays={getCleanDays} th={th} isPro={isBloomPlus()} onUpgrade={() => setShowPaywall(true)} />
           </div>
         )}
@@ -1534,7 +1774,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
         {page === "social" && (
           <div style={{ animation: "fadeUp 0.28s ease", textAlign: "center", padding: "60px 20px" }}>
             <Users size={32} color="#4caf50" style={{ marginBottom: 12, opacity: 0.5 }} />
-            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 500, color: th.text, marginBottom: 6 }}>Bloom Together</h2>
+            <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, color: th.text, marginBottom: 6 }}>Bloom Together</h2>
             <p style={{ fontSize: 13, color: th.textSub }}>Coming Soon</p>
           </div>
         )}
@@ -1569,7 +1809,7 @@ export function BloomApp({ initialHabits, initialCoins, initialEarned, initialSt
         <div className="mbg" style={{ background: th.overlayBg }} onClick={(e) => { if (e.target === e.currentTarget) setPage("main"); }}>
           <div className="ml" style={{ background: th.modalBg }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 500, color: th.text }}>Add habit</h2>
+              <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, color: th.text }}>Add habit</h2>
               <button
                 onClick={() => setPage("main")}
                 style={{ background: "none", border: "none", cursor: "pointer", padding: 3, display: "flex", color: th.textMuted }}

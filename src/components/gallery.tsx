@@ -35,7 +35,7 @@ export function Gallery({ habits, getStage, getTotal, isHappy, th, onCreatureTap
           background: th.card, borderColor: th.cardBorder, boxShadow: th.cardShadow,
         }}
       >
-        <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 500, color: th.text }}>
+        <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, color: th.text }}>
           Creature Collection
         </h2>
         <div style={{ display: "flex", gap: 20, justifyContent: "center", marginTop: 12 }}>

@@ -140,3 +140,83 @@ export function fmtQuitRelative(isoStr: string): string {
   if (diffHrs < 24) return `${Math.round(diffHrs)} hours ago`;
   return "";
 }
+
+/* ═══════════ HAPTIC FEEDBACK ═══════════ */
+export function haptic(pattern: "light" | "medium" | "success") {
+  if (typeof navigator === "undefined" || !navigator.vibrate) return;
+  switch (pattern) {
+    case "light": navigator.vibrate(10); break;
+    case "medium": navigator.vibrate(20); break;
+    case "success": navigator.vibrate([10, 50, 10]); break;
+  }
+}
+
+/* ═══════════ TIME-AWARE GREETINGS ═══════════ */
+function hashString(s: string): number {
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    hash = ((hash << 5) - hash) + ch;
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getTimePeriod(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return "morning";
+  if (h >= 12 && h < 17) return "afternoon";
+  if (h >= 17 && h < 21) return "evening";
+  return "night";
+}
+
+export function getGreeting(): string {
+  const hour = new Date().getHours();
+
+  let options: string[];
+  if (hour >= 5 && hour < 12) {
+    options = [
+      "Good morning. One day at a time.",
+      "New day, new chance. You\u2019ve got this.",
+      "Morning. Your creatures are waking up too.",
+    ];
+  } else if (hour >= 12 && hour < 17) {
+    options = [
+      "Afternoon check-in. Still going strong.",
+      "Halfway through the day. Keep it up.",
+      "You\u2019re doing great today.",
+    ];
+  } else if (hour >= 17 && hour < 21) {
+    options = [
+      "Evening wind-down. Still time to grow today.",
+      "Almost through today. You\u2019ve got this.",
+      "The evening is yours. Finish strong.",
+    ];
+  } else {
+    options = [
+      "Late night. Be gentle with yourself.",
+      "Night owl hours. Your planet is still here.",
+      "Can\u2019t sleep? That\u2019s okay. You\u2019re still clean.",
+      "The night is quiet. You\u2019re doing fine.",
+    ];
+  }
+
+  // Seed by date + time period so greeting is consistent within a period
+  const seedStr = new Date().toDateString() + getTimePeriod();
+  const index = hashString(seedStr) % options.length;
+  return options[index];
+}
+
+/* ═══════════ LIVE TIMER ═══════════ */
+export function formatLiveTimer(quitDate: string, now: number): { days: number; hours: number; minutes: number; totalHours: number } | null {
+  const d = new Date(quitDate);
+  if (isNaN(d.getTime())) return null;
+  const ms = now - d.getTime();
+  if (ms < 0) return null;
+  const totalMinutes = Math.floor(ms / 60000);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
+  return { days, hours, minutes, totalHours };
+}

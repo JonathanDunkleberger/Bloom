@@ -39,10 +39,10 @@ export function Shop({ coins, ownedItems, onBuy, onOwnedTap, isPro, onPremiumTap
         }}>
           <Store size={20} color="white" />
         </div>
-        <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 500, color: th.text }}>
+        <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, color: th.text }}>
           World Shop
         </h2>
-        <p style={{ fontSize: 11, color: th.textSub, marginTop: 4 }}>
+        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>
           Customize your planet with items earned from streaks
         </p>
         <div style={{

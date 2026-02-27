@@ -128,8 +128,8 @@ export function Constellation({ habits, isDone, getStreak, getTotal, getCleanDay
     <div style={{ animation: "fadeUp .28s ease" }}>
       {/* Title */}
       <div style={{ textAlign: "center", marginBottom: 12 }}>
-        <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 19, fontWeight: 500, color: th.text }}>Insights</h2>
-        <p style={{ fontSize: 11, color: th.textSub, marginTop: 2 }}>Your habits at a glance</p>
+        <h2 style={{ fontFamily: "'Fraunces',serif", fontSize: 24, fontWeight: 700, color: th.text }}>Insights</h2>
+        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>Your habits at a glance</p>
       </div>
 
       {/* ── 1. Overview stats ── */}
