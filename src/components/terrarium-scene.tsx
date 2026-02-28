@@ -5,6 +5,9 @@ import { seed } from "@/lib/utils";
 import { SEASONS } from "@/lib/constants";
 import { PlanetItem } from "@/components/planet-items";
 import { getCreatureColor, getCreatureSprite, CREATURE_SIZES } from "@/lib/sprites";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { getAnimationTier, getTierConfig } from "@/lib/animation-tiers";
+import type { TierConfig } from "@/lib/animation-tiers";
 import type { HabitWithStats } from "@/types";
 import type { SeasonKey } from "@/lib/constants";
 
@@ -40,6 +43,11 @@ export function TerrariumScene({
   const half = pct >= 0.5;
   const sn = SEASONS[season] || SEASONS.summer;
   const sr = seed;
+
+  // ── Animation tier system ──
+  const prefersReducedMotion = useReducedMotion();
+  const tier = getAnimationTier(prefersReducedMotion);
+  const tc: TierConfig = getTierConfig(tier);
 
   // Planet center & radius — scales with habit count and progress
   const cx = 200, cy = 200;
@@ -143,19 +151,21 @@ export function TerrariumScene({
         </defs>
 
         {/* ── STARFIELD ── */}
-        {Array.from({ length: 40 + Math.floor(pct * 30) }).map((_, i) => {
+        {Array.from({ length: Math.min(tc.maxStars, 40 + Math.floor(pct * 30)) }).map((_, i) => {
           const r = sr(i * 37 + 7);
           const sx = r() * 400, sy = r() * 400;
           const sz = 0.4 + r() * (pct > 0.5 ? 1.4 : 0.8);
           return (
             <circle key={`s${i}`} cx={sx} cy={sy} r={sz} fill="white" opacity={0.15 + r() * 0.45}>
-              <animate attributeName="opacity" values={`${0.1 + r() * 0.2};${0.4 + r() * 0.4};${0.1 + r() * 0.2}`} dur={`${2 + r() * 4}s`} repeatCount="indefinite" />
+              {tc.starTwinkle && (
+                <animate attributeName="opacity" values={`${0.1 + r() * 0.2};${0.4 + r() * 0.4};${0.1 + r() * 0.2}`} dur={`${2 + r() * 4}s`} repeatCount="indefinite" />
+              )}
             </circle>
           );
         })}
 
         {/* ── DISTANT NEBULA (visible when progress > 30%) ── */}
-        {pct > 0.3 && (
+        {tc.showNebula && pct > 0.3 && (
           <>
             <ellipse cx="340" cy="60" rx={30 + pct * 15} ry={18 + pct * 8} fill={pc.accent} opacity={0.03 + pct * 0.04} filter="url(#lp-soft)" />
             <ellipse cx="60" cy="260" rx={20 + pct * 10} ry={15 + pct * 6} fill="#8B5CF6" opacity={0.02 + pct * 0.03} filter="url(#lp-soft)" />
@@ -163,7 +173,7 @@ export function TerrariumScene({
         )}
 
         {/* ── SHOOTING STARS (all done) ── */}
-        {allDone && Array.from({ length: 3 }).map((_, i) => {
+        {tc.showShootingStars && allDone && Array.from({ length: 3 }).map((_, i) => {
           const r = sr(i * 131 + 55);
           const sx = 50 + r() * 300, sy = 20 + r() * 80;
           return (
@@ -191,7 +201,7 @@ export function TerrariumScene({
         </g>
 
         {/* ── SUBTLE CLOUDS ── */}
-        {pct > 0.2 && (
+        {tc.showClouds && pct > 0.2 && (
           <>
             <ellipse cx="70" cy="90" rx="28" ry="6" fill="white" opacity="0" filter="url(#lp-soft)">
               <animate attributeName="opacity" values="0;0.03;0.03;0" dur="18s" repeatCount="indefinite" />
@@ -209,16 +219,20 @@ export function TerrariumScene({
         )}
 
         {/* ── ORBITAL RING ── */}
-        <ellipse cx={cx} cy={cy + 10} rx={pr + 38} ry={12 + pct * 4} fill="none" stroke="rgba(255,255,255,0.035)" strokeWidth="0.8" strokeDasharray="4 6">
-          <animate attributeName="ry" values={`${12 + pct * 4};${14 + pct * 4};${12 + pct * 4}`} dur="8s" repeatCount="indefinite" />
-        </ellipse>
-        {/* Small orbital dots */}
-        {pct > 0.5 && [0, 120, 240].map((deg, i) => (
-          <circle key={`od${i}`} cx={cx + Math.cos(deg * Math.PI / 180) * (pr + 36)} cy={cy + 10 + Math.sin(deg * Math.PI / 180) * 12}
-            r="1.2" fill="white" opacity="0.15">
-            <animateTransform attributeName="transform" type="rotate" from={`${deg} ${cx} ${cy + 10}`} to={`${deg + 360} ${cx} ${cy + 10}`} dur={`${20 + i * 5}s`} repeatCount="indefinite" />
-          </circle>
-        ))}
+        {tc.showOrbitalRing && (
+          <>
+            <ellipse cx={cx} cy={cy + 10} rx={pr + 38} ry={12 + pct * 4} fill="none" stroke="rgba(255,255,255,0.035)" strokeWidth="0.8" strokeDasharray="4 6">
+              <animate attributeName="ry" values={`${12 + pct * 4};${14 + pct * 4};${12 + pct * 4}`} dur="8s" repeatCount="indefinite" />
+            </ellipse>
+            {/* Small orbital dots */}
+            {pct > 0.5 && [0, 120, 240].map((deg, i) => (
+              <circle key={`od${i}`} cx={cx + Math.cos(deg * Math.PI / 180) * (pr + 36)} cy={cy + 10 + Math.sin(deg * Math.PI / 180) * 12}
+                r="1.2" fill="white" opacity="0.15">
+                <animateTransform attributeName="transform" type="rotate" from={`${deg} ${cx} ${cy + 10}`} to={`${deg + 360} ${cx} ${cy + 10}`} dur={`${20 + i * 5}s`} repeatCount="indefinite" />
+              </circle>
+            ))}
+          </>
+        )}
 
         {/* ── PLANET GLOW ── */}
         <circle cx={cx} cy={cy} r={pr + 25} fill="url(#lp-glow)" />
@@ -345,18 +359,20 @@ export function TerrariumScene({
           const creatureColor = getCreatureColor(h.color);
           const spritePath = getCreatureSprite(st, creatureColor);
 
-          // Animation: mood-aware
-          const anim = isBouncing
-            ? "completionBounce 0.5s cubic-bezier(0.34,1.56,0.64,1)"
-            : mood === "sleeping"
-              ? `creatureIdleFloat 4s ease-in-out infinite`
-              : mood === "neglected"
-                ? `neglectedWobble 3s ease-in-out infinite`
-                : mood === "thriving"
-                  ? `bob ${1.8 + r() * 0.8}s ease-in-out infinite`
-                  : isQuitHabit
-                    ? `creatureIdleFloat 3s ease-in-out infinite`
-                    : `bob ${2.2 + r() * 1.5}s ease-in-out infinite`;
+          // Animation: mood-aware (disabled in minimal tier)
+          const anim = !tc.animateCreatures
+            ? "none"
+            : isBouncing
+              ? "completionBounce 0.5s cubic-bezier(0.34,1.56,0.64,1)"
+              : mood === "sleeping"
+                ? `creatureIdleFloat 4s ease-in-out infinite`
+                : mood === "neglected"
+                  ? `neglectedWobble 3s ease-in-out infinite`
+                  : mood === "thriving"
+                    ? `bob ${1.8 + r() * 0.8}s ease-in-out infinite`
+                    : isQuitHabit
+                      ? `creatureIdleFloat 3s ease-in-out infinite`
+                      : `bob ${2.2 + r() * 1.5}s ease-in-out infinite`;
 
           // Mood-based filter
           const moodFilter = mood === "sleeping"
@@ -389,7 +405,7 @@ export function TerrariumScene({
                     imageRendering: "pixelated",
                     filter: moodFilter,
                     transition: "filter 0.5s ease, transform 0.3s ease",
-                    animation: mood === "healthy" || mood === "thriving"
+                    animation: tc.showCreatureMoodFx && (mood === "healthy" || mood === "thriving")
                       ? `creatureBlink 4s ease-in-out infinite ${1 + r() * 3}s`
                       : undefined,
                   }}
@@ -417,7 +433,7 @@ export function TerrariumScene({
                 </foreignObject>
 
                 {/* ZZZ for sleeping creatures */}
-                {mood === "sleeping" && (
+                {tc.showCreatureMoodFx && mood === "sleeping" && (
                   <foreignObject
                     x={scaledSz * 0.1} y={-scaledSz * 0.9}
                     width={30} height={20}
@@ -442,7 +458,7 @@ export function TerrariumScene({
                 )}
 
                 {/* Sparkles for thriving creatures */}
-                {mood === "thriving" && !isBouncing && (
+                {tc.showCreatureMoodFx && mood === "thriving" && !isBouncing && (
                   <>
                     {[0, 1, 2].map((si) => {
                       const sa = (si * 120 + 30) * Math.PI / 180;
@@ -463,7 +479,7 @@ export function TerrariumScene({
               </g>
 
               {/* Sparkle particles on completion bounce */}
-              {isBouncing && [0, 1, 2, 3].map((si) => {
+              {tc.showBounceSparkles && isBouncing && [0, 1, 2, 3].map((si) => {
                 const angle = (si * 90 + 45) * Math.PI / 180;
                 const dist = scaledSz * 0.6;
                 return (
@@ -479,7 +495,7 @@ export function TerrariumScene({
         })}
 
         {/* ── SEASONAL PARTICLES in space around planet ── */}
-        {season === "winter" && Array.from({ length: 15 + Math.floor(pct * 10) }).map((_, i) => {
+        {tc.showSeasonalParticles && season === "winter" && Array.from({ length: Math.min(tc.maxSeasonalParticles, 15 + Math.floor(pct * 10)) }).map((_, i) => {
           const r = sr(i * 41 + 99);
           const x = r() * 400, startY = -10 - r() * 60;
           return (
@@ -489,7 +505,7 @@ export function TerrariumScene({
             </circle>
           );
         })}
-        {season === "spring" && Array.from({ length: 10 + Math.floor(pct * 8) }).map((_, i) => {
+        {tc.showSeasonalParticles && season === "spring" && Array.from({ length: Math.min(tc.maxSeasonalParticles, 10 + Math.floor(pct * 8)) }).map((_, i) => {
           const r = sr(i * 53 + 77);
           const x = r() * 400, startY = -10 - r() * 40;
           return (
@@ -501,7 +517,7 @@ export function TerrariumScene({
             </ellipse>
           );
         })}
-        {season === "autumn" && Array.from({ length: 10 + Math.floor(pct * 8) }).map((_, i) => {
+        {tc.showSeasonalParticles && season === "autumn" && Array.from({ length: Math.min(tc.maxSeasonalParticles, 10 + Math.floor(pct * 8)) }).map((_, i) => {
           const r = sr(i * 67 + 31);
           const x = r() * 400, startY = -10 - r() * 50;
           const lc = sn.flowerColors[Math.floor(r() * 5)];
@@ -512,7 +528,7 @@ export function TerrariumScene({
             </path>
           );
         })}
-        {season === "summer" && half && Array.from({ length: 6 + Math.floor(pct * 6) }).map((_, i) => {
+        {tc.showSeasonalParticles && season === "summer" && half && Array.from({ length: Math.min(tc.maxSeasonalParticles, 6 + Math.floor(pct * 6)) }).map((_, i) => {
           const r = sr(i * 89 + 17);
           const x = 40 + r() * 320, y = 40 + r() * 240;
           return (
@@ -528,7 +544,7 @@ export function TerrariumScene({
         </ellipse>
 
         {/* ── AURORA (all complete) ── */}
-        {allDone && (
+        {tc.showAurora && allDone && (
           <>
             <path d="M60,25 Q130,10 200,20 Q270,30 340,15" fill="none" stroke="#66FFAA" strokeWidth="3" opacity={0} filter="url(#lp-soft)">
               <animate attributeName="opacity" values="0;0.15;0.05;0.12;0" dur="6s" repeatCount="indefinite" />

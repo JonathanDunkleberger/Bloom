@@ -20,6 +20,7 @@ export interface Habit {
   icon_name: string;
   category: string;
   is_archived: boolean;
+  is_paused: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -57,6 +58,40 @@ export interface QuitData {
   reason: string;         // personal reason
   urges: string[];        // array of ISO dates when urges were logged
   bestStreak: number;     // best clean-day streak achieved (survives relapse resets)
+}
+
+/** Quit progress row from Supabase */
+export interface QuitProgressRow {
+  id: string;
+  user_id: string;
+  habit_id: string;
+  quit_date: string;
+  daily_cost: number;
+  reason: string;
+  urges: string[];
+  best_streak: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** User inventory row from Supabase */
+export interface UserInventoryRow {
+  id: string;
+  user_id: string;
+  item_id: string;
+  created_at: string;
+}
+
+/** User preferences row from Supabase */
+export interface UserPreferencesRow {
+  id: string;
+  user_id: string;
+  dark_mode: boolean;
+  season: string;
+  earned_milestone_coins: Record<string, string[]>;
+  stage_drops: Record<string, number>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface EarnedMilestones {

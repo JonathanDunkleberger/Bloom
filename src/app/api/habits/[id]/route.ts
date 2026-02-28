@@ -19,7 +19,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await req.json();
 
   // Allowlist: only permit safe fields to be updated
-  const ALLOWED_FIELDS = ["name", "color", "icon_name", "category", "is_archived", "sort_order"];
+  const ALLOWED_FIELDS = ["name", "color", "icon_name", "category", "is_archived", "is_paused", "sort_order"];
   const sanitized: Record<string, unknown> = {};
   for (const key of ALLOWED_FIELDS) {
     if (key in body) sanitized[key] = body[key];

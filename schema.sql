@@ -37,6 +37,7 @@ create table if not exists public.habits (
   icon_name    text not null default 'Target',
   category     text not null default 'general',
   is_archived  boolean not null default false,
+  is_paused    boolean not null default false,
   sort_order   int not null default 0,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
@@ -87,7 +88,56 @@ create table if not exists public.milestones (
 create index if not exists idx_milestones_habit_id on public.milestones (habit_id);
 
 -- ============================================================
--- 6. UPDATED_AT TRIGGER
+-- 6. QUIT_PROGRESS (one row per quit-type habit)
+-- ============================================================
+create table if not exists public.quit_progress (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     text not null,
+  habit_id    uuid not null references public.habits(id) on delete cascade,
+  quit_date   text not null,
+  daily_cost  real not null default 0,
+  reason      text not null default '',
+  urges       jsonb not null default '[]',
+  best_streak int not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  unique (user_id, habit_id)
+);
+
+create index if not exists idx_quit_progress_user_id on public.quit_progress (user_id);
+create index if not exists idx_quit_progress_habit_id on public.quit_progress (habit_id);
+
+-- ============================================================
+-- 7. USER_INVENTORY (owned shop items)
+-- ============================================================
+create table if not exists public.user_inventory (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     text not null,
+  item_id     text not null,
+  created_at  timestamptz not null default now(),
+  unique (user_id, item_id)
+);
+
+create index if not exists idx_user_inventory_user_id on public.user_inventory (user_id);
+
+-- ============================================================
+-- 8. USER_PREFERENCES (per-user settings)
+-- ============================================================
+create table if not exists public.user_preferences (
+  id                    uuid primary key default gen_random_uuid(),
+  user_id               text unique not null,
+  dark_mode             boolean not null default false,
+  season                text not null default 'summer',
+  earned_milestone_coins jsonb not null default '{}',
+  stage_drops           jsonb not null default '{}',
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+
+create index if not exists idx_user_preferences_user_id on public.user_preferences (user_id);
+
+-- ============================================================
+-- 9. UPDATED_AT TRIGGER
 -- ============================================================
 create or replace function public.handle_updated_at()
 returns trigger as $$
@@ -103,6 +153,14 @@ create trigger set_profiles_updated_at
 
 create trigger set_habits_updated_at
   before update on public.habits
+  for each row execute function public.handle_updated_at();
+
+create trigger set_quit_progress_updated_at
+  before update on public.quit_progress
+  for each row execute function public.handle_updated_at();
+
+create trigger set_user_preferences_updated_at
+  before update on public.user_preferences
   for each row execute function public.handle_updated_at();
 
 -- ============================================================
@@ -187,6 +245,55 @@ create policy "Users can insert own milestones"
 create policy "Users can update own milestones"
   on public.milestones for update
   using (habit_id in (select id from public.habits where user_id = requesting_user_id()));
+
+-- QUIT_PROGRESS
+alter table public.quit_progress enable row level security;
+
+create policy "Users can view own quit progress"
+  on public.quit_progress for select
+  using (user_id = requesting_user_id());
+
+create policy "Users can insert own quit progress"
+  on public.quit_progress for insert
+  with check (user_id = requesting_user_id());
+
+create policy "Users can update own quit progress"
+  on public.quit_progress for update
+  using (user_id = requesting_user_id());
+
+create policy "Users can delete own quit progress"
+  on public.quit_progress for delete
+  using (user_id = requesting_user_id());
+
+-- USER_INVENTORY
+alter table public.user_inventory enable row level security;
+
+create policy "Users can view own inventory"
+  on public.user_inventory for select
+  using (user_id = requesting_user_id());
+
+create policy "Users can insert own inventory"
+  on public.user_inventory for insert
+  with check (user_id = requesting_user_id());
+
+create policy "Users can delete own inventory"
+  on public.user_inventory for delete
+  using (user_id = requesting_user_id());
+
+-- USER_PREFERENCES
+alter table public.user_preferences enable row level security;
+
+create policy "Users can view own preferences"
+  on public.user_preferences for select
+  using (user_id = requesting_user_id());
+
+create policy "Users can insert own preferences"
+  on public.user_preferences for insert
+  with check (user_id = requesting_user_id());
+
+create policy "Users can update own preferences"
+  on public.user_preferences for update
+  using (user_id = requesting_user_id());
 
 -- ============================================================
 -- MIGRATION: If upgrading from v1, run these ALTER statements:

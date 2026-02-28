@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { TendApp } from "@/components/tend-app";
 import { today, daysAgo, getStage } from "@/lib/utils";
-import type { Habit, HabitLog, HabitWithStats, EarnedMilestones } from "@/types";
+import type { Habit, HabitLog, HabitWithStats, EarnedMilestones, QuitData, QuitProgressRow } from "@/types";
 
 export default async function GardenPage() {
   const { userId } = await auth();
@@ -59,6 +59,70 @@ export default async function GardenPage() {
     earned[`${m.habit_id}:${m.value}`] = true;
   });
 
+  // ── New: fetch quit_progress, user_inventory, user_preferences ──
+
+  // Quit progress → convert DB rows to quitDataMap keyed by habit_id
+  let initialQuitData: Record<string, QuitData> = {};
+  {
+    const { data: qpRows } = await supabase
+      .from("quit_progress")
+      .select("*")
+      .eq("user_id", userId);
+    if (qpRows && qpRows.length > 0) {
+      for (const row of qpRows as QuitProgressRow[]) {
+        initialQuitData[row.habit_id] = {
+          quitDate: row.quit_date,
+          dailyCost: row.daily_cost,
+          reason: row.reason,
+          urges: Array.isArray(row.urges) ? row.urges : [],
+          bestStreak: row.best_streak,
+        };
+      }
+    }
+  }
+
+  // User inventory → string[]
+  let initialOwnedItems: string[] = [];
+  {
+    const { data: invRows } = await supabase
+      .from("user_inventory")
+      .select("item_id")
+      .eq("user_id", userId)
+      .order("created_at");
+    if (invRows) {
+      initialOwnedItems = invRows.map((r: { item_id: string }) => r.item_id);
+    }
+  }
+
+  // User preferences
+  let initialPreferences: {
+    darkMode: boolean;
+    season: string;
+    earnedMilestoneCoins: Record<string, string[]>;
+    stageDrops: Record<string, number>;
+  } = { darkMode: false, season: "summer", earnedMilestoneCoins: {}, stageDrops: {} };
+  {
+    const { data: prefs } = await supabase
+      .from("user_preferences")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+    if (prefs) {
+      initialPreferences = {
+        darkMode: prefs.dark_mode ?? false,
+        season: prefs.season ?? "summer",
+        earnedMilestoneCoins: (prefs.earned_milestone_coins as Record<string, string[]>) ?? {},
+        stageDrops: (prefs.stage_drops as Record<string, number>) ?? {},
+      };
+    }
+  }
+
+  // Build paused habits map from habit.is_paused column
+  const initialPausedHabits: Record<string, boolean> = {};
+  (habits || []).forEach((h: Habit) => {
+    if (h.is_paused) initialPausedHabits[h.id] = true;
+  });
+
   const todayStr = today();
 
   // Compute stats per habit
@@ -95,6 +159,10 @@ export default async function GardenPage() {
       initialCoins={profile?.coins ?? 250}
       initialEarned={earned}
       initialStreakFreezes={(profile?.streak_freezes as Record<string, number>) ?? {}}
+      initialQuitData={initialQuitData}
+      initialOwnedItems={initialOwnedItems}
+      initialPausedHabits={initialPausedHabits}
+      initialPreferences={initialPreferences}
     />
   );
 }

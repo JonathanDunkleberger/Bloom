@@ -37,6 +37,7 @@ import {
   QUIT_PRESETS, SHOP_ITEMS,
 } from "@/lib/constants";
 import type { HabitWithStats, EarnedMilestones, QuitData } from "@/types";
+import { migrateLocalStorageToServer } from "@/lib/migrate-local-data";
 import type { LucideIcon } from "lucide-react";
 import type { SeasonKey } from "@/lib/constants";
 
@@ -45,26 +46,32 @@ interface TendAppProps {
   initialCoins: number;
   initialEarned: EarnedMilestones;
   initialStreakFreezes: Record<string, number>;
+  initialQuitData: Record<string, QuitData>;
+  initialOwnedItems: string[];
+  initialPausedHabits: Record<string, boolean>;
+  initialPreferences: {
+    darkMode: boolean;
+    season: string;
+    earnedMilestoneCoins: Record<string, string[]>;
+    stageDrops: Record<string, number>;
+  };
 }
 
-export function TendApp({ initialHabits, initialCoins, initialEarned, initialStreakFreezes }: TendAppProps) {
+export function TendApp({
+  initialHabits, initialCoins, initialEarned, initialStreakFreezes,
+  initialQuitData, initialOwnedItems, initialPausedHabits, initialPreferences,
+}: TendAppProps) {
   const router = useRouter();
   const [habits, setHabits] = useState<HabitWithStats[]>(initialHabits);
   const [coins, setCoins] = useState(initialCoins);
   const [earned, setEarned] = useState<EarnedMilestones>(initialEarned);
   const [streakFreezes, setStreakFreezes] = useState<Record<string, number>>(initialStreakFreezes);
-  const [pausedHabits, setPausedHabits] = useState<Record<string, boolean>>(() => {
-    try { const r = typeof window !== "undefined" && localStorage.getItem("tend_paused_habits"); return r ? JSON.parse(r) : {}; } catch { return {}; }
-  });
-  const [earnedMilestoneCoins, setEarnedMilestoneCoins] = useState<Record<string, string[]>>(() => {
-    try { const r = typeof window !== "undefined" && localStorage.getItem("tend_milestone_coins"); return r ? JSON.parse(r) : {}; } catch { return {}; }
-  });
-  const [stageDrops, setStageDrops] = useState<Record<string, number>>(() => {
-    try { const r = typeof window !== "undefined" && localStorage.getItem("tend_stage_drops"); return r ? JSON.parse(r) : {}; } catch { return {}; }
-  });
+  const [pausedHabits, setPausedHabits] = useState<Record<string, boolean>>(initialPausedHabits);
+  const [earnedMilestoneCoins, setEarnedMilestoneCoins] = useState<Record<string, string[]>>(initialPreferences.earnedMilestoneCoins);
+  const [stageDrops, setStageDrops] = useState<Record<string, number>>(initialPreferences.stageDrops);
   const [milestoneCelebration, setMilestoneCelebration] = useState<{ tier: CoinTier; habitName: string; coinReward: number } | null>(null);
-  const [darkMode, setDarkMode] = useState(false);
-  const [season, setSeason] = useState<SeasonKey>(getSeason());
+  const [darkMode, setDarkMode] = useState(initialPreferences.darkMode);
+  const [season, setSeason] = useState<SeasonKey>((initialPreferences.season as SeasonKey) || getSeason());
   const th = THEME[darkMode ? "dark" : "light"];
   const [page, setPageRaw] = useState<"main" | "detail" | "add" | "gallery" | "constellation" | "social" | "shop">("main");
   const prevPageRef = useRef<string>("main");
@@ -100,17 +107,13 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [daysAwayCnt, setDaysAwayCnt] = useState(0);
   const [bounceBackDay, setBounceBackDay] = useState(0);
-  const [quitDataMap, setQuitDataMap] = useState<Record<string, QuitData>>(() => {
-    try { const r = typeof window !== "undefined" && localStorage.getItem("tend_quit_data"); return r ? JSON.parse(r) : {}; } catch { return {}; }
-  });
+  const [quitDataMap, setQuitDataMap] = useState<Record<string, QuitData>>(initialQuitData);
   const [breathingHabit, setBreathingHabit] = useState<HabitWithStats | null>(null);
   const [showBreathe, setShowBreathe] = useState(false);
   const [relapseHabit, setRelapseHabit] = useState<HabitWithStats | null>(null);
   const [urgeSupportHabit, setUrgeSupportHabit] = useState<HabitWithStats | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [ownedItems, setOwnedItems] = useState<string[]>(() => {
-    try { const r = typeof window !== "undefined" && localStorage.getItem("tend_owned_items"); return r ? JSON.parse(r) : []; } catch { return []; }
-  });
+  const [ownedItems, setOwnedItems] = useState<string[]>(initialOwnedItems);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -175,11 +178,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   useEffect(() => {
     setTimeout(() => setMounted(true), 50);
 
-    // Hydrate localStorage-dependent state after mount
-    const savedDark = localStorage.getItem("tend_dark");
-    if (savedDark === "1") setDarkMode(true);
-    const savedSeason = localStorage.getItem("tend_season") as SeasonKey | null;
-    if (savedSeason && savedSeason in SEASONS) setSeason(savedSeason);
+    // Dark mode and season are now loaded from server props (user_preferences table)
+    // localStorage still used as fallback cache in persistence effects below
 
     // Welcome back detection
     if (typeof window !== "undefined") {
@@ -217,6 +217,9 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       }
 
       setAppLoading(false);
+
+      // One-time migration: move localStorage data to Supabase (no-op if already done)
+      migrateLocalStorageToServer();
     }
   }, []);
 
@@ -226,58 +229,77 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     return () => clearInterval(interval);
   }, []);
 
-  // Persist quit data with verification
+  // ── Write-through persistence: server API + localStorage cache ──
+  // Uses mounted guard so we don't fire on initial render with server-fetched data
+  const hasHydrated = useRef(false);
+  useEffect(() => { hasHydrated.current = true; }, []);
+
+  // Persist quit data → server + localStorage cache
   useEffect(() => {
-    if (typeof window !== "undefined" && Object.keys(quitDataMap).length > 0) {
-      const data = JSON.stringify(quitDataMap);
-      localStorage.setItem("tend_quit_data", data);
-      if (process.env.NODE_ENV === "development") {
-        const readBack = localStorage.getItem("tend_quit_data");
-        if (!readBack) console.error("SAVE FAILED: quit data not persisted");
-      }
+    if (typeof window === "undefined") return;
+    localStorage.setItem("tend_quit_data", JSON.stringify(quitDataMap));
+    if (!hasHydrated.current) return;
+    // Write each quit entry to server
+    for (const [habitId, qd] of Object.entries(quitDataMap)) {
+      fetch(`/api/quit-progress/${habitId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(qd),
+      }).catch(() => {});
     }
   }, [quitDataMap]);
 
-  // Persist owned items with verification
+  // Persist owned items → server + localStorage cache
   useEffect(() => {
-    if (typeof window !== "undefined" && ownedItems.length > 0) {
-      const data = JSON.stringify(ownedItems);
-      localStorage.setItem("tend_owned_items", data);
-      if (process.env.NODE_ENV === "development") {
-        const readBack = localStorage.getItem("tend_owned_items");
-        if (!readBack) console.error("SAVE FAILED: owned items not persisted");
-      }
-    }
+    if (typeof window === "undefined") return;
+    localStorage.setItem("tend_owned_items", JSON.stringify(ownedItems));
+    // Note: individual item purchases/removals are handled at the call site
+    // This effect just keeps localStorage in sync
   }, [ownedItems]);
 
-  // Persist paused habits
+  // Persist paused habits → server (via habit PATCH) + localStorage cache
   useEffect(() => {
-    if (typeof window !== "undefined" && Object.keys(pausedHabits).length > 0) {
-      localStorage.setItem("tend_paused_habits", JSON.stringify(pausedHabits));
+    if (typeof window === "undefined") return;
+    localStorage.setItem("tend_paused_habits", JSON.stringify(pausedHabits));
+    if (!hasHydrated.current) return;
+    // Sync each paused state to the habit record
+    for (const [habitId, paused] of Object.entries(pausedHabits)) {
+      fetch(`/api/habits/${habitId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_paused: paused }),
+      }).catch(() => {});
     }
   }, [pausedHabits]);
 
-  // Persist milestone coins
+  // Persist preferences (milestone coins, stage drops, dark mode, season) → server + localStorage
   useEffect(() => {
-    if (typeof window !== "undefined" && Object.keys(earnedMilestoneCoins).length > 0) {
-      localStorage.setItem("tend_milestone_coins", JSON.stringify(earnedMilestoneCoins));
-    }
-  }, [earnedMilestoneCoins]);
+    if (typeof window === "undefined") return;
+    localStorage.setItem("tend_milestone_coins", JSON.stringify(earnedMilestoneCoins));
+    localStorage.setItem("tend_stage_drops", JSON.stringify(stageDrops));
+    if (!hasHydrated.current) return;
+    fetch("/api/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        earned_milestone_coins: earnedMilestoneCoins,
+        stage_drops: stageDrops,
+      }),
+    }).catch(() => {});
+  }, [earnedMilestoneCoins, stageDrops]);
 
-  // Persist stage drops
+  // Persist dark mode & season → server + localStorage
   useEffect(() => {
-    if (typeof window !== "undefined" && Object.keys(stageDrops).length > 0) {
-      localStorage.setItem("tend_stage_drops", JSON.stringify(stageDrops));
-    }
-  }, [stageDrops]);
-
-  // Persist dark mode & season
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("tend_dark", darkMode ? "1" : "0");
-  }, [darkMode]);
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("tend_season", season);
-  }, [season]);
+    if (typeof window === "undefined") return;
+    localStorage.setItem("tend_dark", darkMode ? "1" : "0");
+    localStorage.setItem("tend_season", season);
+    if (!hasHydrated.current) return;
+    fetch("/api/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dark_mode: darkMode, season }),
+    }).catch(() => {});
+  }, [darkMode, season]);
 
   // Persist Tend+ state
   useEffect(() => {
@@ -860,6 +882,12 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     setCoinToast({ msg: `${item.name} placed on your planet!`, icon: Store });
     setCoins((prev) => Math.max(0, prev - item.price));
     syncCoins(-item.price);
+    // Sync to server inventory
+    fetch("/api/inventory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId }),
+    }).catch(() => {});
   };
 
   // Bounce-back recovery: check once per day when any habit is completed
