@@ -94,6 +94,17 @@ export interface UserPreferencesRow {
   updated_at: string;
 }
 
+/** Urge entry row from Supabase */
+export interface UrgeEntryRow {
+  id: string;
+  user_id: string;
+  habit_id: string;
+  method: "breathe" | "write" | "redirect";
+  tags: string[];
+  note: string;
+  created_at: string;
+}
+
 export interface EarnedMilestones {
   [key: string]: boolean; // "habitId:days" -> true
 }

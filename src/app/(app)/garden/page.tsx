@@ -25,25 +25,25 @@ export default async function GardenPage() {
     ? await supabase.from("habit_logs").select("*").in("habit_id", habitIds).gte("log_date", logWindow)
     : { data: [] };
 
-  // Fetch profile for coins + streak_freezes
-  // Try with streak_freezes first; fall back to coins-only if column doesn't exist yet
-  let profile: { coins: number; streak_freezes?: Record<string, number> } | null = null;
+  // Fetch profile for coins + streak_freezes + tier (Tend+ verification)
+  // Try with all columns first; fall back gracefully if columns don't exist yet
+  let profile: { coins: number; streak_freezes?: Record<string, number>; tier?: string } | null = null;
   {
     const { data, error } = await supabase
       .from("profiles")
-      .select("coins, streak_freezes")
+      .select("coins, streak_freezes, tier")
       .eq("clerk_id", userId)
       .single();
     if (!error) {
       profile = data;
     } else {
-      // streak_freezes column may not exist yet – fetch coins only
+      // streak_freezes or tier column may not exist yet – fetch coins only
       const { data: fallback } = await supabase
         .from("profiles")
         .select("coins")
         .eq("clerk_id", userId)
         .single();
-      profile = fallback ? { ...fallback, streak_freezes: {} } : null;
+      profile = fallback ? { ...fallback, streak_freezes: {}, tier: "free" } : null;
     }
   }
 
@@ -159,6 +159,7 @@ export default async function GardenPage() {
       initialCoins={profile?.coins ?? 250}
       initialEarned={earned}
       initialStreakFreezes={(profile?.streak_freezes as Record<string, number>) ?? {}}
+      initialIsPro={profile?.tier === "pro"}
       initialQuitData={initialQuitData}
       initialOwnedItems={initialOwnedItems}
       initialPausedHabits={initialPausedHabits}

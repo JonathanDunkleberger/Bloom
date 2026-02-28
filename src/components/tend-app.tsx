@@ -38,6 +38,7 @@ import {
 } from "@/lib/constants";
 import type { HabitWithStats, EarnedMilestones, QuitData } from "@/types";
 import { migrateLocalStorageToServer } from "@/lib/migrate-local-data";
+import { apiCall, apiSync } from "@/lib/api";
 import type { LucideIcon } from "lucide-react";
 import type { SeasonKey } from "@/lib/constants";
 
@@ -49,6 +50,7 @@ interface TendAppProps {
   initialQuitData: Record<string, QuitData>;
   initialOwnedItems: string[];
   initialPausedHabits: Record<string, boolean>;
+  initialIsPro: boolean;
   initialPreferences: {
     darkMode: boolean;
     season: string;
@@ -59,7 +61,7 @@ interface TendAppProps {
 
 export function TendApp({
   initialHabits, initialCoins, initialEarned, initialStreakFreezes,
-  initialQuitData, initialOwnedItems, initialPausedHabits, initialPreferences,
+  initialQuitData, initialOwnedItems, initialPausedHabits, initialIsPro, initialPreferences,
 }: TendAppProps) {
   const router = useRouter();
   const [habits, setHabits] = useState<HabitWithStats[]>(initialHabits);
@@ -126,8 +128,8 @@ export function TendApp({
   // ── Egg callout tooltip for first quit habit ──
   const [showEggCallout, setShowEggCallout] = useState(false);
 
-  // ── Tend+ tier state ──
-  const [isPro, setIsPro] = useState(false);
+  // ── Tend+ tier state (server-verified via profiles.tier) ──
+  const [isPro, setIsPro] = useState(initialIsPro);
   const [proExpiry, setProExpiry] = useState<string | null>(null);
   const [lastBonusDate, setLastBonusDate] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -151,11 +153,7 @@ export function TendApp({
 
   // ── Coin sync helper — uses delta-based API to prevent race conditions ──
   const syncCoins = useCallback((delta: number, extraPayload?: Record<string, unknown>) => {
-    fetch("/api/coins", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delta, ...extraPayload }),
-    }).catch(() => {});
+    apiSync("/api/coins", "POST", { delta, ...extraPayload });
   }, []);
 
   // ── Live timer for quit detail ──
@@ -195,11 +193,8 @@ export function TendApp({
       }
       localStorage.setItem("tend_last_visit", now);
 
-      // Load Tend+ state
-      const savedPro = localStorage.getItem("tend_pro");
-      if (savedPro === "1") setIsPro(true);
-      const savedExpiry = localStorage.getItem("tend_pro_expiry");
-      if (savedExpiry) setProExpiry(savedExpiry);
+      // Tend+ state is now server-verified via initialIsPro prop
+      // Only load bonus date from localStorage
       const savedBonus = localStorage.getItem("tend_last_bonus");
       if (savedBonus) setLastBonusDate(savedBonus);
 
@@ -230,62 +225,39 @@ export function TendApp({
   }, []);
 
   // ── Write-through persistence: server API + localStorage cache ──
-  // Uses mounted guard so we don't fire on initial render with server-fetched data
+  // Quit data and paused habits use point-of-action syncing (see updateQuitData, togglePause)
+  // Preferences use effect-based syncing since multiple sources update them
   const hasHydrated = useRef(false);
   useEffect(() => { hasHydrated.current = true; }, []);
 
-  // Persist quit data → server + localStorage cache
+  // Keep quit data localStorage cache in sync (server sync happens at point of action)
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem("tend_quit_data", JSON.stringify(quitDataMap));
-    if (!hasHydrated.current) return;
-    // Write each quit entry to server
-    for (const [habitId, qd] of Object.entries(quitDataMap)) {
-      fetch(`/api/quit-progress/${habitId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(qd),
-      }).catch(() => {});
-    }
   }, [quitDataMap]);
 
-  // Persist owned items → server + localStorage cache
+  // Persist owned items → localStorage cache (server sync happens at buyItem call site)
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem("tend_owned_items", JSON.stringify(ownedItems));
-    // Note: individual item purchases/removals are handled at the call site
-    // This effect just keeps localStorage in sync
   }, [ownedItems]);
 
-  // Persist paused habits → server (via habit PATCH) + localStorage cache
+  // Keep paused habits localStorage cache in sync (server sync happens at togglePause)
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem("tend_paused_habits", JSON.stringify(pausedHabits));
-    if (!hasHydrated.current) return;
-    // Sync each paused state to the habit record
-    for (const [habitId, paused] of Object.entries(pausedHabits)) {
-      fetch(`/api/habits/${habitId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_paused: paused }),
-      }).catch(() => {});
-    }
   }, [pausedHabits]);
 
-  // Persist preferences (milestone coins, stage drops, dark mode, season) → server + localStorage
+  // Persist preferences (milestone coins, stage drops) → server + localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem("tend_milestone_coins", JSON.stringify(earnedMilestoneCoins));
     localStorage.setItem("tend_stage_drops", JSON.stringify(stageDrops));
     if (!hasHydrated.current) return;
-    fetch("/api/preferences", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        earned_milestone_coins: earnedMilestoneCoins,
-        stage_drops: stageDrops,
-      }),
-    }).catch(() => {});
+    apiSync("/api/preferences", "PUT", {
+      earned_milestone_coins: earnedMilestoneCoins,
+      stage_drops: stageDrops,
+    });
   }, [earnedMilestoneCoins, stageDrops]);
 
   // Persist dark mode & season → server + localStorage
@@ -294,11 +266,7 @@ export function TendApp({
     localStorage.setItem("tend_dark", darkMode ? "1" : "0");
     localStorage.setItem("tend_season", season);
     if (!hasHydrated.current) return;
-    fetch("/api/preferences", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dark_mode: darkMode, season }),
-    }).catch(() => {});
+    apiSync("/api/preferences", "PUT", { dark_mode: darkMode, season });
   }, [darkMode, season]);
 
   // Persist Tend+ state
@@ -385,10 +353,12 @@ export function TendApp({
 
   const updateQuitData = useCallback(
     (hId: string, patch: Partial<QuitData>) => {
-      setQuitDataMap((prev) => ({
-        ...prev,
-        [hId]: { ...prev[hId], ...patch } as QuitData,
-      }));
+      setQuitDataMap((prev) => {
+        const updated = { ...prev[hId], ...patch } as QuitData;
+        // Point-of-action server sync — only the changed habit
+        apiSync(`/api/quit-progress/${hId}`, "PUT", updated);
+        return { ...prev, [hId]: updated };
+      });
     },
     []
   );
@@ -399,7 +369,10 @@ export function TendApp({
         const cur = prev[hId];
         if (!cur) return prev;
         const urges = [...(cur.urges || []), todayStr];
-        return { ...prev, [hId]: { ...cur, urges } };
+        const updated = { ...cur, urges };
+        // Point-of-action server sync
+        apiSync(`/api/quit-progress/${hId}`, "PUT", updated);
+        return { ...prev, [hId]: updated };
       });
     },
     [todayStr]
@@ -737,24 +710,19 @@ export function TendApp({
       })
     );
 
-    try {
-      const res = await fetch(`/api/habits/${hId}/log`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: todayStr }),
-      });
-      const data = await res.json();
-      if (!wasComplete && data.action === "logged") {
-        const streak = getStreak(hId) + 1;
-        setTimeout(() => checkMilestones(hId, streak), 100);
-        // Check AA-style milestone coins for build habits
-        const habit = habits.find((h) => h.id === hId);
-        if (habit && habit.category !== "quit") {
-          setTimeout(() => checkMilestoneCoins(hId, habit.name, false, streak), 200);
-        }
+    const result = await apiCall<{ action: string }>(`/api/habits/${hId}/log`, {
+      method: "POST",
+      body: { date: todayStr },
+      onError: () => router.refresh(),
+    });
+    if (result.ok && !wasComplete && result.data?.action === "logged") {
+      const streak = getStreak(hId) + 1;
+      setTimeout(() => checkMilestones(hId, streak), 100);
+      // Check AA-style milestone coins for build habits
+      const habit = habits.find((h) => h.id === hId);
+      if (habit && habit.category !== "quit") {
+        setTimeout(() => checkMilestoneCoins(hId, habit.name, false, streak), 200);
       }
-    } catch {
-      router.refresh();
     }
   };
 
@@ -762,36 +730,29 @@ export function TendApp({
 
   const addHabit = async (name: string, color: string, iconName: string, cat: string = "general", dailyCost: number = 0) => {
     setAddError("");
-    try {
-      const res = await fetch("/api/habits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, color, icon_name: iconName, category: cat }),
-      });
-      if (res.ok) {
-        const newHabit = await res.json();
-        setHabits((prev) => [
-          ...prev,
-          { ...newHabit, currentStreak: 0, totalDays: 0, completedToday: false, stage: 0, logs: [] },
-        ]);
-        // Initialise quit data for quit habits
-        if (cat === "quit") {
-          updateQuitData(newHabit.id, { quitDate: new Date().toISOString(), dailyCost, reason: "", urges: [], bestStreak: 0 });
-          // Show egg callout if first quit habit
-          const eggSeen = localStorage.getItem("tend_egg_callout_shown");
-          if (!eggSeen) {
-            setTimeout(() => setShowEggCallout(true), 600);
-            localStorage.setItem("tend_egg_callout_shown", "1");
-          }
+    const result = await apiCall<HabitWithStats>("/api/habits", {
+      method: "POST",
+      body: { name, color, icon_name: iconName, category: cat },
+      onError: (msg) => setAddError(msg),
+    });
+    if (result.ok && result.data) {
+      const newHabit = result.data;
+      setHabits((prev) => [
+        ...prev,
+        { ...newHabit, currentStreak: 0, totalDays: 0, completedToday: false, stage: 0, logs: [] },
+      ]);
+      // Initialise quit data for quit habits
+      if (cat === "quit") {
+        updateQuitData(newHabit.id, { quitDate: new Date().toISOString(), dailyCost, reason: "", urges: [], bestStreak: 0 });
+        // Show egg callout if first quit habit
+        const eggSeen = localStorage.getItem("tend_egg_callout_shown");
+        if (!eggSeen) {
+          setTimeout(() => setShowEggCallout(true), 600);
+          localStorage.setItem("tend_egg_callout_shown", "1");
         }
-        setPage("main");
-        setCName("");
-      } else {
-        const err = await res.json().catch(() => null);
-        setAddError(err?.error || "Failed to add habit. Please try again.");
       }
-    } catch {
-      setAddError("Network error. Please try again.");
+      setPage("main");
+      setCName("");
     }
   };
 
@@ -813,11 +774,10 @@ export function TendApp({
       },
     });
 
-    try {
-      await fetch(`/api/habits/${id}`, { method: "DELETE" });
-    } catch {
-      router.refresh();
-    }
+    await apiCall(`/api/habits/${id}`, {
+      method: "DELETE",
+      onError: () => router.refresh(),
+    });
   };
 
   const saveEdit = async () => {
@@ -827,15 +787,11 @@ export function TendApp({
       p.map((h) => (h.id === detailId ? { ...h, name: trimmed, color: editColor } : h))
     );
     setEditMode(false);
-    try {
-      await fetch(`/api/habits/${detailId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, color: editColor }),
-      });
-    } catch {
-      router.refresh();
-    }
+    await apiCall(`/api/habits/${detailId}`, {
+      method: "PATCH",
+      body: { name: trimmed, color: editColor },
+      onError: () => router.refresh(),
+    });
   };
 
   const saveRename = async (hId: string) => {
@@ -843,14 +799,12 @@ export function TendApp({
     if (!trimmed) { setRenamingId(null); return; }
     setHabits((p) => p.map((h) => (h.id === hId ? { ...h, name: trimmed } : h)));
     setRenamingId(null);
-    try {
-      const h = habits.find((x) => x.id === hId);
-      await fetch(`/api/habits/${hId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, color: h?.color || "#6366f1" }),
-      });
-    } catch { router.refresh(); }
+    const h = habits.find((x) => x.id === hId);
+    await apiCall(`/api/habits/${hId}`, {
+      method: "PATCH",
+      body: { name: trimmed, color: h?.color || "#6366f1" },
+      onError: () => router.refresh(),
+    });
   };
 
   const buyFreeze = async (hId: string) => {
@@ -865,6 +819,8 @@ export function TendApp({
   const togglePause = (hId: string) => {
     const wasPaused = !!pausedHabits[hId];
     setPausedHabits((prev) => ({ ...prev, [hId]: !wasPaused }));
+    // Point-of-action server sync — only the toggled habit
+    apiSync(`/api/habits/${hId}`, "PATCH", { is_paused: !wasPaused });
     haptic("light");
     if (!wasPaused) {
       setCoinToast({ msg: "Habit paused. Streak preserved.", icon: Pause });
@@ -883,11 +839,7 @@ export function TendApp({
     setCoins((prev) => Math.max(0, prev - item.price));
     syncCoins(-item.price);
     // Sync to server inventory
-    fetch("/api/inventory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId }),
-    }).catch(() => {});
+    apiSync("/api/inventory", "POST", { itemId });
   };
 
   // Bounce-back recovery: check once per day when any habit is completed
@@ -936,7 +888,7 @@ export function TendApp({
   ) => {
     // Set 250 starting coins
     setCoins(250);
-    fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: 250 }) }).catch(() => {});
+    apiSync("/api/coins", "POST", { coins: 250 });
 
     // Create quit habit
     if (quitPick) {
@@ -1058,6 +1010,13 @@ export function TendApp({
             logUrge(urgeSupportHabit.id);
             setCoins((p) => p + 3);
             syncCoins(3);
+            // Persist urge entry with method, tags, and note
+            apiSync("/api/urge-entries", "POST", {
+              habit_id: urgeSupportHabit.id,
+              method: data.method,
+              tags: data.tags,
+              note: data.note,
+            });
             setUrgeSupportHabit(null);
           }}
           onClose={() => setUrgeSupportHabit(null)}
@@ -1098,35 +1057,14 @@ export function TendApp({
               setShowPaywall(false);
               setCoinToast({ msg: "Welcome to Tend+!", icon: Sparkles });
             };
-            try {
-              const res = await fetch("/api/checkout", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ plan }),
-              });
-
-              if (!res.ok) {
-                activateLocally();
-                return;
-              }
-
-              let data: Record<string, unknown>;
-              try {
-                data = await res.json();
-              } catch {
-                activateLocally();
-                return;
-              }
-
-              if (data.url) {
-                window.location.href = data.url as string;
-                return;
-              }
-
-              // Dev mode or fallback
-              activateLocally();
-            } catch {
-              // Network error — activate locally so user is never stuck
+            const result = await apiCall<{ url?: string }>("/api/checkout", {
+              method: "POST",
+              body: { plan },
+              onError: () => activateLocally(),
+            });
+            if (result.ok && result.data?.url) {
+              window.location.href = result.data.url;
+            } else {
               activateLocally();
             }
           }}

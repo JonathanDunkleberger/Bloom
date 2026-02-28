@@ -17,11 +17,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-4ade80?style=flat-square&labelColor=0a0e18" />
-  <img src="https://img.shields.io/badge/next.js-15-white?style=flat-square&labelColor=0a0e18" />
+  <img src="https://img.shields.io/badge/version-1.1.0-4ade80?style=flat-square&labelColor=0a0e18" />
+  <img src="https://img.shields.io/badge/next.js-16-white?style=flat-square&labelColor=0a0e18" />
   <img src="https://img.shields.io/badge/react-19-61dafb?style=flat-square&labelColor=0a0e18" />
   <img src="https://img.shields.io/badge/license-proprietary-8b85a0?style=flat-square&labelColor=0a0e18" />
-  <img src="https://img.shields.io/badge/data-local%20only-22c55e?style=flat-square&labelColor=0a0e18" />
+  <img src="https://img.shields.io/badge/data-encrypted%20cloud-22c55e?style=flat-square&labelColor=0a0e18" />
 </p>
 
 <br />
@@ -110,19 +110,20 @@ Recovery features are **never** gated. Breathing, urge support, healing timeline
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Framework** | Next.js 15 (App Router) | Server components, routing, static export |
+| **Framework** | Next.js 16 (App Router) | Server components, SSR data loading, API routes |
 | **UI** | React 19 + Tailwind CSS | Component architecture, utility styling |
+| **Auth** | Clerk | Authentication, user management, webhooks |
+| **Database** | Supabase (PostgreSQL) | Cloud persistence, RLS, real-time |
 | **Rendering** | Pixel art sprites (Sprout Lands) | Creature and decoration assets |
 | **Icons** | Lucide React | Consistent, clean iconography |
 | **Typography** | Fraunces + DM Sans | Serif display + clean body |
-| **Storage** | localStorage / AsyncStorage | Zero-server, privacy-first persistence |
-| **Payments** | Stripe (web) / StoreKit (iOS) | Subscription billing |
+| **Payments** | Stripe (web) / StoreKit (iOS) | Subscription billing, webhook-verified |
 | **Hosting** | Vercel | Edge deployment, instant previews |
 | **Native** | React Native + Expo | iOS App Store distribution |
 
 ### Data Model
 
-All data is stored locally. No accounts. No servers. No telemetry.
+All user data is stored in Supabase (PostgreSQL) and tied to authenticated Clerk accounts. A localStorage cache provides instant hydration while the server remains the source of truth. No telemetry. No tracking.
 
 ---
 
@@ -166,7 +167,7 @@ vercel --prod
 
 ## Roadmap
 
-### v1.0 — Launch *(current)*
+### v1.0 — Launch *(shipped)*
 - [x] Dual-mode habit tracking (build + quit)
 - [x] Urge intervention system (Breathe / Write / Redirect)
 - [x] Living planet with pixel art creatures
@@ -177,16 +178,24 @@ vercel --prod
 - [x] Tend+ subscription
 - [x] Morning check-in + creature reactions
 - [x] Privacy policy + Terms of Service
+
+### v1.1 — Cloud & Polish *(current)*
+- [x] Clerk authentication + Supabase cloud sync
+- [x] Stripe webhook-verified subscriptions
+- [x] Server-side rendering with SSR data loading
+- [x] Animation tier system (reduced motion support)
+- [x] Typed API layer with error handling
 - [ ] React Native build for App Store
 - [ ] TestFlight beta
 
-### v1.1 — Polish
+### v1.2 — Engagement
 - [ ] Push notifications (native, opt-in, max 2/day)
 - [ ] Sound design (optional, ASMR-quality)
 - [ ] Weekly recap (Sunday summary)
 - [ ] Night wind-down screen
+- [ ] Persisted urge journal insights
 
-### v1.2 — Social
+### v1.3 — Social
 - [ ] Shared planets (anonymous accountability partner)
 - [ ] Shareable milestone cards (privacy-safe, no habit names by default)
 
@@ -208,9 +217,9 @@ Breathing timer, urge journal, healing timelines, relapse support, and milestone
 
 There are no red screens, broken streaks, or dying creatures. Relapsing shows: "You went 3 days. That strength is still inside you." Users earn +5 coins for honesty when they reset. The app should be the last thing someone deletes, not the first.
 
-### Data stays on-device.
+### Your data is yours.
 
-Tend collects nothing. No analytics, no tracking, no accounts. Your recovery journey is stored on your phone and nowhere else. We can't see it. We can't sell it. We can't lose it.
+Tend stores data in an encrypted cloud database tied to your authenticated account — no anonymous analytics, no tracking pixels, no data brokers. We can't sell what we don't collect. Your recovery journey syncs across devices but stays private.
 
 ### Engagement without addiction.
 
