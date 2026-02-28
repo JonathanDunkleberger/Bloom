@@ -5,7 +5,7 @@ import { MILESTONES } from "@/lib/constants";
 
 const MILESTONE_DAYS: number[] = MILESTONES.map((m) => m.days);
 
-export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -16,7 +16,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { data: habit } = await supabase.from("habits").select("id").eq("id", id).eq("user_id", userId).single();
   if (!habit) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const today = new Date().toISOString().split("T")[0];
+  // Accept client's local date to avoid timezone mismatch (fallback to UTC)
+  let today: string;
+  try {
+    const body = await req.json();
+    // Validate date format YYYY-MM-DD
+    if (body?.date && /^\d{4}-\d{2}-\d{2}$/.test(body.date)) {
+      today = body.date;
+    } else {
+      today = new Date().toISOString().split("T")[0];
+    }
+  } catch {
+    today = new Date().toISOString().split("T")[0];
+  }
 
   // Check if already logged today
   const { data: existing } = await supabase

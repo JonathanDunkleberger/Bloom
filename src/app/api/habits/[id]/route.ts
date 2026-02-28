@@ -17,8 +17,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json();
+
+  // Allowlist: only permit safe fields to be updated
+  const ALLOWED_FIELDS = ["name", "color", "icon_name", "category", "is_archived", "sort_order"];
+  const sanitized: Record<string, unknown> = {};
+  for (const key of ALLOWED_FIELDS) {
+    if (key in body) sanitized[key] = body[key];
+  }
+  if (Object.keys(sanitized).length === 0) {
+    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.from("habits").update(body).eq("id", id).eq("user_id", userId).select().single();
+  const { data, error } = await supabase.from("habits").update(sanitized).eq("id", id).eq("user_id", userId).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

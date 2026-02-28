@@ -146,6 +146,15 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
   const [creatureBounce, setCreatureBounce] = useState(false);
   const prevAllDoneRef = useRef(false);
 
+  // ── Coin sync helper — uses delta-based API to prevent race conditions ──
+  const syncCoins = useCallback((delta: number, extraPayload?: Record<string, unknown>) => {
+    fetch("/api/coins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delta, ...extraPayload }),
+    }).catch(() => {});
+  }, []);
+
   // ── Live timer for quit detail ──
   const [liveNow, setLiveNow] = useState(Date.now());
 
@@ -303,13 +312,14 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       setLastBonusDate(todayVal);
       localStorage.setItem("tend_last_bonus", todayVal);
       setCoinToast({ msg: "+5 daily Tend+ coins", icon: Coins });
-      fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: coins + 5 }) }).catch(() => {});
+      syncCoins(5);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, isPro]);
 
-  // Dev toggle: tap logo 5x
+  // Dev toggle: tap logo 5x (disabled in production)
   const onLogoTap = useCallback(() => {
+    if (process.env.NODE_ENV === "production") return;
     const ref = logoTapRef.current;
     ref.count++;
     if (ref.timer) clearTimeout(ref.timer);
@@ -418,7 +428,9 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
         return getCleanDays(hId);
       }
       let s = 0;
-      let d = 0;
+      // If today isn't complete yet, start counting from yesterday
+      // (don't break streak mid-day — streak breaks when the day ends uncompleted)
+      let d = isComplete(hId, daysAgo(0)) ? 0 : 1;
       let gaps = 0;
       const maxGaps = streakFreezes[hId] || 0;
       while (true) {
@@ -435,6 +447,36 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       return s;
     },
     [isComplete, streakFreezes, habits, getCleanDays]
+  );
+
+  // Best streak — compute historical maximum consecutive run from logs
+  const getBestStreak = useCallback(
+    (hId: string) => {
+      const h = habits.find((x) => x.id === hId);
+      if (h?.category === "quit") {
+        const qd = quitDataMap[hId];
+        return Math.max(getCleanDays(hId), qd?.bestStreak ?? 0);
+      }
+      // Collect all log dates for this habit, sort chronologically
+      const dates = (h?.logs || []).map((l) => l.log_date).sort();
+      if (!dates.length) return 0;
+      let best = 1;
+      let run = 1;
+      for (let i = 1; i < dates.length; i++) {
+        const prev = new Date(dates[i - 1] + "T12:00:00");
+        const curr = new Date(dates[i] + "T12:00:00");
+        const diffDays = Math.round((curr.getTime() - prev.getTime()) / 86400000);
+        if (diffDays === 1) {
+          run++;
+          best = Math.max(best, run);
+        } else if (diffDays > 1) {
+          run = 1;
+        }
+        // diffDays === 0 means duplicate date, skip
+      }
+      return Math.max(best, getStreak(hId));
+    },
+    [habits, quitDataMap, getCleanDays, getStreak]
   );
 
   const getTotal = useCallback(
@@ -512,11 +554,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       }, 800);
       // +10 coins at 1200ms
       setTimeout(() => {
-        setCoins((p) => {
-          const nv = p + 10;
-          fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
-          return nv;
-        });
+        setCoins((p) => p + 10);
+        syncCoins(10);
         setCoinToast({ msg: "+10 all habits done!", icon: Sparkles });
       }, 1200);
     }
@@ -537,15 +576,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     }
     if (nc > 0) {
       haptic("medium");
-      setCoins((prev) => {
-        const newCoins = prev + nc;
-        fetch("/api/coins", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ coins: newCoins }),
-        }).catch(() => {});
-        return newCoins;
-      });
+      setCoins((prev) => prev + nc);
+      syncCoins(nc);
       setEarned(ne);
     }
   };
@@ -628,11 +660,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
           prev.push(c.day);
           changed = true;
           setCoinToast({ msg: `${c.msg} +${c.bonus}`, icon: Sparkles });
-          setCoins((p) => {
-            const nv = p + c.bonus;
-            fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
-            return nv;
-          });
+          setCoins((p) => p + c.bonus);
+          syncCoins(c.bonus);
         }
       }
       fired[h.id] = prev;
@@ -687,7 +716,11 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     );
 
     try {
-      const res = await fetch(`/api/habits/${hId}/log`, { method: "POST" });
+      const res = await fetch(`/api/habits/${hId}/log`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: todayStr }),
+      });
       const data = await res.json();
       if (!wasComplete && data.action === "logged") {
         const streak = getStreak(hId) + 1;
@@ -803,15 +836,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     const newFreezes = { ...streakFreezes, [hId]: (streakFreezes[hId] || 0) + 1 };
     setStreakFreezes(newFreezes);
     setCoinToast({ msg: "Streak freeze activated!", icon: Shield });
-    setCoins((prev) => {
-      const newCoins = Math.max(0, prev - 50);
-      fetch("/api/coins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coins: newCoins, streakFreezes: newFreezes }),
-      }).catch(() => router.refresh());
-      return newCoins;
-    });
+    setCoins((prev) => Math.max(0, prev - 50));
+    syncCoins(-50, { streakFreezes: newFreezes });
   };
 
   const togglePause = (hId: string) => {
@@ -832,15 +858,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
     setOwnedItems((prev) => [...prev, itemId]);
     haptic("light");
     setCoinToast({ msg: `${item.name} placed on your planet!`, icon: Store });
-    setCoins((prev) => {
-      const newCoins = Math.max(0, prev - item.price);
-      fetch("/api/coins", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ coins: newCoins }),
-      }).catch(() => router.refresh());
-      return newCoins;
-    });
+    setCoins((prev) => Math.max(0, prev - item.price));
+    syncCoins(-item.price);
   };
 
   // Bounce-back recovery: check once per day when any habit is completed
@@ -857,11 +876,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
         if (recovery) {
           setCoins((p) => p + recovery.c);
           setCoinToast({ msg: recovery.msg, icon: RefreshCw });
-          fetch("/api/coins", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ coins: coins + recovery.c, earned }),
-          }).catch(() => {});
+          syncCoins(recovery.c);
         }
         if (newBB >= 7) setBounceBackDay(-1); // Recovery complete
       }
@@ -981,11 +996,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
           onDismiss={() => {
             setShowMorningCheckin(false);
             localStorage.setItem("tend_checkin_date", todayStr);
-            setCoins((p) => {
-              const nv = p + 2;
-              fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
-              return nv;
-            });
+            setCoins((p) => p + 2);
+            syncCoins(2);
             setCoinToast({ msg: "Checked in! +2", icon: Sunrise });
           }}
           th={th}
@@ -1000,7 +1012,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
       {(breathingHabit || showBreathe) && (
         <BreathingTimer
           habit={breathingHabit}
-          onComplete={() => { setBreathingHabit(null); setShowBreathe(false); setCoinToast({ msg: breathingHabit ? "Urge surfed!" : "Centered. +2 coins.", icon: Wind }); setCoins((p) => { const nv = p + (breathingHabit ? 0 : 2); if (nv !== p) fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {}); return nv; }); }}
+          onComplete={() => { setBreathingHabit(null); setShowBreathe(false); setCoinToast({ msg: breathingHabit ? "Urge surfed!" : "Centered. +2 coins.", icon: Wind }); const amt = breathingHabit ? 0 : 2; if (amt > 0) { setCoins((p) => p + amt); syncCoins(amt); } }}
           onClose={() => { setBreathingHabit(null); setShowBreathe(false); }}
           th={th}
         />
@@ -1016,11 +1028,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
           onComplete={(data) => {
             haptic("success");
             logUrge(urgeSupportHabit.id);
-            setCoins((p) => {
-              const nv = p + 3;
-              fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
-              return nv;
-            });
+            setCoins((p) => p + 3);
+            syncCoins(3);
             setUrgeSupportHabit(null);
           }}
           onClose={() => setUrgeSupportHabit(null)}
@@ -1041,11 +1050,8 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
             resetQuit(hId);
             setRelapseHabit(null);
             // +5 coins for honesty
-            setCoins((p) => {
-              const nv = p + 5;
-              fetch("/api/coins", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ coins: nv }) }).catch(() => {});
-              return nv;
-            });
+            setCoins((p) => p + 5);
+            syncCoins(5);
             setCoinToast({ msg: "Brave honesty. +5 coins. You've got this.", icon: Heart });
           }}
           onClose={() => setRelapseHabit(null)}
@@ -1871,7 +1877,7 @@ export function TendApp({ initialHabits, initialCoins, initialEarned, initialStr
                   {[
                     { l: "Streak", v: `${getStreak(detailHabit.id)}d` },
                     { l: "Total", v: getTotal(detailHabit.id) },
-                    { l: "Best", v: `${getStreak(detailHabit.id)}d` },
+                    { l: "Best", v: `${getBestStreak(detailHabit.id)}d` },
                   ].map((s, i) => (
                     <div key={i}>
                       <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Fraunces',serif", color: th.text }}>{s.v}</div>

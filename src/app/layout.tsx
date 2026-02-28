@@ -2,8 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Tend — Habit & Recovery Tracker",
   description: "Quit bad habits. Grow new ones. Tend helps you through recovery with guided breathing, urge support, and creatures that grow with your progress.",

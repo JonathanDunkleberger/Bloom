@@ -19,10 +19,10 @@ export default async function GardenPage() {
 
   const habitIds = (habits || []).map((h: Habit) => h.id);
 
-  // Fetch logs (last 365 days for heatmaps)
-  const yearAgo = daysAgo(365);
+  // Fetch logs (last 90 days — sufficient for heatmaps and streak calc)
+  const logWindow = daysAgo(90);
   const { data: logs } = habitIds.length > 0
-    ? await supabase.from("habit_logs").select("*").in("habit_id", habitIds).gte("log_date", yearAgo)
+    ? await supabase.from("habit_logs").select("*").in("habit_id", habitIds).gte("log_date", logWindow)
     : { data: [] };
 
   // Fetch profile for coins + streak_freezes
@@ -70,6 +70,8 @@ export default async function GardenPage() {
     let currentStreak = 0;
     let d = 0;
     const logDates = new Set(habitLogs.map((l: HabitLog) => l.log_date));
+    // If today isn't complete yet, start from yesterday (don't break streak mid-day)
+    if (!logDates.has(daysAgo(0))) d = 1;
     while (logDates.has(daysAgo(d))) {
       currentStreak++;
       d++;
