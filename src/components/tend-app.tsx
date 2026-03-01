@@ -1516,6 +1516,14 @@ export function TendApp({
             {/* Progress bar */}
             {habits.length > 0 && (
               <div style={{ padding: "10px 2px 4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, padding: "0 2px" }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: th.textMuted, letterSpacing: 0.3 }}>
+                    {allDone ? "All done!" : "Today's progress"}
+                  </span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: allDone ? "#4caf50" : th.textMuted }}>
+                    {totalToday}/{activeHabits.length}
+                  </span>
+                </div>
                 <div style={{ height: 4, borderRadius: 2, background: th.progressBg, overflow: "hidden" }}>
                   <div style={{
                     height: "100%", borderRadius: 2,
@@ -1716,23 +1724,24 @@ export function TendApp({
                             />
                           ) : (
                           <>
+                          <div style={{
+                            fontSize: 15, fontWeight: h.creature_name ? 600 : 500,
+                            textDecoration: !h.creature_name && done ? "line-through" : "none",
+                            color: isPaused ? th.textMuted : (done && !h.creature_name ? th.textMuted : th.text),
+                            transition: "all 0.2s",
+                            lineHeight: 1.2,
+                          }}>
+                            {h.creature_name || h.name}
+                          </div>
                           {h.creature_name && (
-                            <span style={{
-                              fontSize: 15, fontWeight: 600,
-                              color: isPaused ? th.textMuted : th.text,
+                            <div style={{
+                              fontSize: 11, fontWeight: 500, marginTop: 1,
+                              color: isPaused ? th.textMuted : th.textSub,
                               transition: "all 0.2s",
                             }}>
-                              {h.creature_name}
-                            </span>
+                              {h.name}
+                            </div>
                           )}
-                          <span style={{
-                            fontSize: h.creature_name ? 11 : 15, fontWeight: h.creature_name ? 500 : 500,
-                            textDecoration: done ? "line-through" : "none",
-                            color: isPaused ? th.textMuted : (h.creature_name ? th.textSub : (done ? th.textMuted : th.text)),
-                            transition: "all 0.2s",
-                          }}>
-                            {h.name}
-                          </span>
                           </>
                           )}
                           {subtitle && (

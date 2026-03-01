@@ -56,18 +56,19 @@ export function TerrariumScene({
   const progressBonus = pct * 8;
   const pr = baseRadius + habitBonus + progressBonus;
 
-  // ── CREATURE PLACEMENT: spread across full upper 270° of planet ──
-  // Uses predefined arcs for small counts, even distribution for 6+
+  // ── CREATURE PLACEMENT: spread creatures around more of the planet ──
+  // Uses predefined arcs — wider spread for small counts to use the space
   const N = habits.length;
   const creatureAngles = habits.map((h, i) => {
     // Base angles (degrees from top, 0 = top center)
+    // Wider arcs for small counts so they're not all clustered at top
     let baseAngle: number;
-    if (N === 1) baseAngle = 0;
-    else if (N === 2) baseAngle = [-45, 45][i];
-    else if (N === 3) baseAngle = [-60, 0, 60][i];
-    else if (N === 4) baseAngle = [-90, -30, 30, 90][i];
-    else if (N === 5) baseAngle = [-100, -50, 0, 50, 100][i];
-    else baseAngle = -120 + (240 / (N - 1)) * i; // 6+: evenly from -120 to +120
+    if (N === 1) baseAngle = -15; // slightly off-center for visual interest
+    else if (N === 2) baseAngle = [-55, 55][i];
+    else if (N === 3) baseAngle = [-80, 15, 80][i]; // wide triangle, one near top
+    else if (N === 4) baseAngle = [-100, -30, 40, 110][i];
+    else if (N === 5) baseAngle = [-110, -55, 0, 55, 110][i];
+    else baseAngle = -130 + (260 / (N - 1)) * i; // 6+: evenly from -130 to +130
 
     // Seeded jitter: ±5° angle, ±3px radial
     const hashVal = h.id.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
@@ -351,11 +352,12 @@ export function TerrariumScene({
 
           // Sprite display size based on stage
           const sz = CREATURE_SIZES[st] || 48;
-          // Scale down if many habits, but never below 36px
+          // Scale UP for few habits (lots of space), scale DOWN for many
           const scaledSz = N >= 8 ? Math.max(36, sz * 0.65)
                          : N >= 6 ? Math.max(40, sz * 0.75)
                          : N >= 4 ? Math.max(44, sz * 0.85)
-                         : sz;
+                         : N <= 2 ? Math.max(56, sz * 1.3)
+                         : Math.max(50, sz * 1.15); // 3 habits
           const species = h.creature_type || deriveDragonFromId(h.id);
           const spritePath = getDragonSprite(st, species);
 
@@ -410,26 +412,29 @@ export function TerrariumScene({
                   }}
                 />
                 {/* Name label — always horizontal (counter-rotate), below sprite */}
+                {/* Hide labels entirely for 8+ habits, shrink for 6-7 */}
+                {N < 8 && (
                 <foreignObject
-                  x={-40} y={4}
-                  width={80} height={16}
+                  x={N >= 6 ? -30 : -40} y={4}
+                  width={N >= 6 ? 60 : 80} height={16}
                   transform={`rotate(${-rotDeg})`}
                   style={{ overflow: "visible" }}
                 >
                   <div style={{
                     textAlign: "center",
-                    fontSize: 10,
+                    fontSize: N >= 6 ? 8 : 10,
                     fontWeight: 600,
                     color: mood === "sleeping" ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.85)",
                     textShadow: "0 1px 3px rgba(0,0,0,0.8)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    maxWidth: 80,
+                    maxWidth: N >= 6 ? 60 : 80,
                     lineHeight: "14px",
                     fontFamily: "inherit",
                   }}>{h.creature_name || h.name}</div>
                 </foreignObject>
+                )}
 
                 {/* ZZZ for sleeping creatures */}
                 {tc.showCreatureMoodFx && mood === "sleeping" && (
