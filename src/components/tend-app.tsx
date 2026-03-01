@@ -1971,6 +1971,7 @@ export function TendApp({
                         fontSize: 11, fontWeight: 600,
                         cursor: "pointer", fontFamily: "inherit",
                         display: "flex", alignItems: "center", gap: 4,
+                        margin: "6px auto 0",
                       }}
                     >
                       🥚 {isTendPlus() ? "Change egg" : "Choose egg"}
