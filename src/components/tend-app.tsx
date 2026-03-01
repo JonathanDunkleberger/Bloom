@@ -7,8 +7,9 @@ import {
   Pencil, Shield, Sun, Moon, LayoutGrid, Crown,
   Users, RefreshCw, Wind, DollarSign, Heart,
   Sunrise, SunMedium, MoonStar, Menu, Store, Pause, Play,
-  Share2,
+  Share2, LogOut, ExternalLink,
 } from "lucide-react";
+import { useUser, useClerk } from "@clerk/nextjs";
 import { Creature } from "@/components/creature";
 import { TerrariumScene } from "@/components/terrarium-scene";
 import { Heatmap } from "@/components/heatmap";
@@ -68,6 +69,8 @@ export function TendApp({
   initialQuitData, initialOwnedItems, initialPausedHabits, initialIsPro, initialPreferences,
 }: TendAppProps) {
   const router = useRouter();
+  const { user } = useUser();
+  const { signOut } = useClerk();
   const [habits, setHabits] = useState<HabitWithStats[]>(initialHabits);
   const [coins, setCoins] = useState(initialCoins);
   const [earned, setEarned] = useState<EarnedMilestones>(initialEarned);
@@ -1381,16 +1384,108 @@ export function TendApp({
               background: th.modalBg, zIndex: 91, padding: "24px 20px",
               animation: "slideFromRight .25s cubic-bezier(.16,1,.3,1)",
               boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
-              display: "flex", flexDirection: "column", gap: 4,
+              display: "flex", flexDirection: "column", gap: 0,
+              overflowY: "auto", WebkitOverflowScrolling: "touch",
             }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: th.text }}>Menu</span>
+              {/* Close button */}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                 <button onClick={() => setMenuOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: th.textSub, display: "flex" }}>
                   <X size={18} />
                 </button>
               </div>
+
+              {/* ── Profile section ── */}
+              <div style={{
+                padding: "14px 12px", borderRadius: 14, marginBottom: 12,
+                background: isTendPlus() ? "rgba(74,222,128,0.05)" : th.hoverBg,
+                border: `1px solid ${isTendPlus() ? "rgba(74,222,128,0.15)" : th.cardBorder}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  {/* Avatar */}
+                  {user?.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.imageUrl} alt="" width={36} height={36} style={{
+                      borderRadius: 10, border: `2px solid ${isTendPlus() ? "#4ade80" : th.cardBorder}`,
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: 36, height: 36, borderRadius: 10,
+                      background: th.progressBg, display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 16, fontWeight: 700, color: th.textMuted,
+                      border: `2px solid ${th.cardBorder}`,
+                    }}>
+                      {(user?.firstName || user?.primaryEmailAddress?.emailAddress || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 14, fontWeight: 700, color: th.text,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}>
+                      {user?.firstName || "Tender"}
+                      {isTendPlus() && <Crown size={12} color="#fbbf24" />}
+                    </div>
+                    <div style={{
+                      fontSize: 11, color: th.textMuted,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      {user?.primaryEmailAddress?.emailAddress || ""}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tier badge */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "8px 10px", borderRadius: 10,
+                  background: isTendPlus() ? "rgba(74,222,128,0.08)" : th.progressBg,
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Crown size={13} color={isTendPlus() ? "#4ade80" : th.textMuted} />
+                    <span style={{
+                      fontSize: 12, fontWeight: 700,
+                      color: isTendPlus() ? "#4ade80" : th.textMuted,
+                    }}>
+                      {isTendPlus() ? "Tend+" : "Free Plan"}
+                    </span>
+                  </div>
+                  {isTendPlus() ? (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/portal", { method: "POST" });
+                          const data = await res.json();
+                          if (data.url) window.location.href = data.url;
+                        } catch { /* ignore */ }
+                      }}
+                      style={{
+                        background: "none", border: "1px solid rgba(74,222,128,0.2)",
+                        borderRadius: 8, padding: "4px 10px", cursor: "pointer",
+                        fontSize: 10, fontWeight: 600, color: "#4ade80",
+                        fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      Manage <ExternalLink size={9} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { setShowPaywall(true); setMenuOpen(false); }}
+                      style={{
+                        background: "#4ade80", border: "none",
+                        borderRadius: 8, padding: "4px 12px", cursor: "pointer",
+                        fontSize: 10, fontWeight: 700, color: "#0a0e18",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      Upgrade
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Navigation items ── */}
               {[
-                ...(!isTendPlus() ? [{ label: "Upgrade to Tend+", Icon: Crown, color: "#4ade80", action: () => { setShowPaywall(true); setMenuOpen(false); } }] : []),
                 { label: "Collection", Icon: LayoutGrid, color: th.textSub, action: () => { setPage("gallery"); setMenuOpen(false); } },
                 { label: "Insights", Icon: Sparkles, color: "#8B5CF6", action: () => { setPage("constellation"); setMenuOpen(false); } },
                 { label: "Breathe", Icon: Wind, color: "#38bdf8", action: () => { setShowBreathe(true); setMenuOpen(false); } },
@@ -1408,6 +1503,8 @@ export function TendApp({
                   {item.label}
                 </button>
               ))}
+
+              {/* ── Season picker ── */}
               <div style={{ height: 1, background: th.cardBorder, margin: "8px 0" }} />
               <div style={{ padding: "8px" }}>
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: th.textMuted }}>Season</span>
@@ -1425,6 +1522,21 @@ export function TendApp({
                   ))}
                 </div>
               </div>
+
+              {/* ── Sign out ── */}
+              <div style={{ height: 1, background: th.cardBorder, margin: "8px 0" }} />
+              <button
+                onClick={() => signOut({ redirectUrl: "/" })}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "12px 8px",
+                  background: "none", border: "none", borderRadius: 12,
+                  cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+                  fontWeight: 500, color: th.textMuted, width: "100%", textAlign: "left",
+                }}
+              >
+                <LogOut size={16} color={th.textMuted} />
+                Sign Out
+              </button>
             </div>
           </>
         )}
