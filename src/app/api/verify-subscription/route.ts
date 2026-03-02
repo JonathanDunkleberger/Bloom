@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 import { NextResponse } from "next/server";
 
 /**
@@ -13,11 +14,12 @@ import { NextResponse } from "next/server";
  * (e.g., local development, misconfigured webhook URL, webhook failures).
  *
  * Flow:
- * 1. Look up user's stripe_customer_id in profiles
- * 2. If no customer ID, check Stripe for recent checkout sessions with clerk_id metadata
- * 3. Query Stripe for active subscriptions for that customer
- * 4. If active subscription found → set tier = 'pro' + store IDs
- * 5. If no active subscription → leave tier as-is (don't downgrade — webhook handles that)
+ * 1. Ensure profile exists (auto-create if Clerk webhook didn't fire)
+ * 2. Look up user's stripe_customer_id in profiles
+ * 3. If no customer ID, check Stripe for recent checkout sessions with clerk_id metadata
+ * 4. Query Stripe for active subscriptions for that customer
+ * 5. If active subscription found → set tier = 'pro' + store IDs
+ * 6. If no active subscription → leave tier as-is (don't downgrade — webhook handles that)
  */
 export async function POST() {
   const { userId } = await auth();
@@ -33,16 +35,8 @@ export async function POST() {
 
   const supabase = await createServerSupabaseClient();
 
-  // Get current profile
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tier, stripe_customer_id, stripe_subscription_id")
-    .eq("clerk_id", userId)
-    .single();
-
-  if (!profile) {
-    return NextResponse.json({ isPro: false, reason: "No profile found" });
-  }
+  // Ensure profile exists (auto-creates if Clerk webhook didn't fire)
+  const profile = await ensureProfile(supabase, userId);
 
   // If already pro in DB, just confirm
   if (profile.tier === "pro") {

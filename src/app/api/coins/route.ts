@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -11,21 +12,15 @@ export async function POST(request: Request) {
 
   const supabase = await createServerSupabaseClient();
 
+  // Ensure profile exists (auto-creates if missing)
+  const existingProfile = await ensureProfile(supabase, userId);
+
   // ── Delta-based path (preferred — race-condition safe) ──
   if (typeof delta === "number") {
     // Clamp delta to reasonable bounds: -500 to +100 per request
     const clampedDelta = Math.max(-500, Math.min(100, delta));
 
-    // Use Supabase RPC or read-then-write with floor at 0
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("coins")
-      .eq("clerk_id", userId)
-      .single();
-
-    if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
-
-    const newCoins = Math.max(0, profile.coins + clampedDelta);
+    const newCoins = Math.max(0, (existingProfile?.coins ?? 250) + clampedDelta);
     const updatePayload: Record<string, unknown> = { coins: newCoins };
     if (streakFreezes !== undefined) {
       updatePayload.streak_freezes = streakFreezes;

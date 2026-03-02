@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { TendApp } from "@/components/tend-app";
 import { today, daysAgo, getStage } from "@/lib/utils";
+import { ensureProfile } from "@/lib/ensure-profile";
 import type { Habit, HabitLog, HabitWithStats, EarnedMilestones, QuitData, QuitProgressRow } from "@/types";
 
 export default async function GardenPage() {
@@ -25,27 +26,8 @@ export default async function GardenPage() {
     ? await supabase.from("habit_logs").select("*").in("habit_id", habitIds).gte("log_date", logWindow)
     : { data: [] };
 
-  // Fetch profile for coins + streak_freezes + tier (Tend+ verification)
-  // Try with all columns first; fall back gracefully if columns don't exist yet
-  let profile: { coins: number; streak_freezes?: Record<string, number>; tier?: string } | null = null;
-  {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("coins, streak_freezes, tier")
-      .eq("clerk_id", userId)
-      .single();
-    if (!error) {
-      profile = data;
-    } else {
-      // streak_freezes or tier column may not exist yet – fetch coins only
-      const { data: fallback } = await supabase
-        .from("profiles")
-        .select("coins")
-        .eq("clerk_id", userId)
-        .single();
-      profile = fallback ? { ...fallback, streak_freezes: {}, tier: "free" } : null;
-    }
-  }
+  // Ensure profile exists (auto-creates if Clerk webhook didn't fire)
+  const profile = await ensureProfile(supabase, userId);
 
   // Fetch earned milestones
   const { data: milestones } = await supabase

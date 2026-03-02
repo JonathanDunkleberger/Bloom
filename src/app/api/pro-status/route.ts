@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 import { NextResponse } from "next/server";
 
 /**
@@ -12,11 +13,7 @@ export async function GET() {
   if (!userId) return NextResponse.json({ isPro: false });
 
   const supabase = await createServerSupabaseClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tier")
-    .eq("clerk_id", userId)
-    .single();
+  const profile = await ensureProfile(supabase, userId);
 
   return NextResponse.json({ isPro: profile?.tier === "pro" });
 }

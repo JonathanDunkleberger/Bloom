@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 import { stripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 
@@ -8,12 +9,7 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = await createServerSupabaseClient();
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("stripe_customer_id")
-    .eq("clerk_id", userId)
-    .single();
+  const profile = await ensureProfile(supabase, userId);
 
   if (!profile?.stripe_customer_id) {
     return NextResponse.json({ error: "No subscription found" }, { status: 404 });

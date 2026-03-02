@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 import { NextResponse } from "next/server";
 import { FREE_HABIT_LIMIT } from "@/lib/constants";
 import { rollDragonSpecies } from "@/lib/sprites";
@@ -23,12 +24,7 @@ export async function POST(request: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const supabase = await createServerSupabaseClient();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("tier")
-    .eq("clerk_id", userId)
-    .single();
-
+  const profile = await ensureProfile(supabase, userId);
   const isPro = profile?.tier === "pro";
 
   if (!isPro) {

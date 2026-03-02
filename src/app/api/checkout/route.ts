@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -40,12 +41,8 @@ export async function POST(req: Request) {
 
     const supabase = await createServerSupabaseClient();
 
-    // Get profile — MUST filter by clerk_id (service-role key bypasses RLS)
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("email, stripe_customer_id")
-      .eq("clerk_id", userId)
-      .single();
+    // Ensure profile exists (auto-creates if Clerk webhook didn't fire)
+    const profile = await ensureProfile(supabase, userId);
 
     const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://tendhabit.com";
 
